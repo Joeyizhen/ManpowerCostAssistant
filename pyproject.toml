@@ -1,0 +1,32 @@
+[project]
+name = "fm-manpower-cost-assistant"
+version = "0.1.0"
+description = "Track 1 conversational FM manpower budget planning"
+requires-python = ">=3.11,<3.15"
+dependencies = [
+  "streamlit[auth]>=1.50,<2",
+  "openai>=2,<3",
+  "pydantic>=2.11,<3",
+  "python-dotenv>=1.1,<2",
+  "SQLAlchemy>=2.0,<3",
+  "psycopg[binary]>=3.2,<4",
+  "plotly>=6,<7",
+  "xlsxwriter>=3.2,<4",
+  "pypdf>=6,<7",
+]
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "ruff>=0.12,<1", "openpyxl>=3.1,<4"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-p no:cacheprovider"
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+extend-exclude = [".uv-cache", ".venv", "local_data", "outputs"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B"]

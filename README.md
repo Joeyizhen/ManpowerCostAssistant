@@ -1,0 +1,63 @@
+# AI-Powered FM Manpower Cost Assistant
+
+Local collaboration baseline for a two-agent/five-track capstone app. Track 1 is a working development journey using labelled synthetic evidence and an optional live OpenAI integration. Its wider six-screen refinement is unfinished. No remaining tracks, shared deployment or historical imports are implemented by this baseline.
+
+| Owner | Agent | Tracks |
+|---|---|---|
+| Project owner | Agent 1: Manpower Budget Planning | 1 — Build New Plan; 2 — Review Proposed Plan |
+| Teammate | Agent 2: Tender Review | 3 — Compare Against Approved Budget; 4 — Review and Compare Tenderer Proposals; 5 — Maintain Historical Manpower Database |
+
+See [collaboration/branches](docs/COLLABORATION.md), [interfaces and synthetic budget](docs/INTERFACES.md), [checkpoint and known issues](docs/HANDOVER.md), [project brief](docs/PROJECT_BRIEF.md) and [validation](docs/VALIDATION.md). Private original handoffs and saved officer data are retained locally and excluded from Git.
+
+## Local setup
+
+Use Python 3.14 for the tested environment. The dependency declaration supports 3.11–3.14, but other versions have not been verified here. With `uv` installed, run from the repository root:
+
+```powershell
+uv sync --frozen --python 3.14
+Copy-Item .env.example .env
+uv run streamlit run app.py --server.address 127.0.0.1 --server.port 8511 --browser.gatherUsageStats false
+```
+
+Open `http://127.0.0.1:8511/`. The preview is local to this computer and stops if its process/computer stops. Existing users can run `.venv/Scripts/python.exe` directly instead of `uv run`.
+
+Edit `.env` privately to set `OPENAI_API_KEY` and `OPENAI_MODEL` if live guidance is required. Alternatively use a private `.streamlit/secrets.toml`, copied from its example. Never put credentials in chat, source, command-line arguments or Git. No model is silently chosen. Each developer uses their own provider access; without a key the tables and synthetic Python tests work, while live review/chat is disabled. The synthetic integration example needs no API access.
+
+Live guidance uses the Responses API with validated tools, finite limits and no automatic retries. The preview process needs outbound provider connectivity; a sandbox-restricted launch may serve the page but block guidance. Failed turns remain available for explicit retry. Shared hosting requires server-side OIDC login, PostgreSQL and an explicit allowlist; see [DEPLOYMENT.md](DEPLOYMENT.md). Do not expose local review mode publicly. No deployment is performed here.
+
+## Current Track 1 behaviour
+
+Enter a brief, start year, base duration and option years (0 for none). Indicate existing contract or new site/service. The current grouped screen presents eight common optional roles and lets you add inventory/custom titles. Proposed quantity 0 excludes a role; an unanswered field is not converted to 0. Fractional staffing uses FTE; posts need a confirmed staffing conversion. Current contract deployment is optional context. Copy-current and mark-unused-zero are explicit actions. Supporting documents and duty/contractor notes are optional. The pasted-list UI has been removed.
+
+Review my manpower plan sends the retained brief, table and supporting text to the real LLM for targeted sanity checks; it does not approve anything. Correct the plan and use the single manpower confirmation before pricing. Rates use one reference year, arithmetic-average starting points when supported, editable sliders/exact inputs and optional assumptions. Unsupported roles retain their titles and need officer rates. The existing future-price, finding, full-contract/chart and Excel controls remain; final approval is an explicit officer action. Editing values invalidates dependent confirmations.
+
+The six separate visible steps, consistent Back/Continue/progress, compact rate/future-price redesign, monthly role-cost column and observed slider band are incomplete. Some numeric missing cells display `None`; narrow tables can scroll horizontally. New current/proposed/zero prompt behaviour has not been rechecked live. Native Excel recalculation, shared hosting and real market validity remain unverified. These are a documented development baseline, not a completed product claim.
+
+## Synthetic evidence and handoff
+
+- `data/sample/historical.json`: invented tender schedules with explicit synthetic provenance; no real BCT prices/records.
+- `data/reference/role_titles.json`: reviewed title context only, with no benchmark-price eligibility implied.
+- `data/sample/integration/approved_budget.synthetic.json`: invented approved-budget transfer example, with a clearly synthetic approval and no saved-project mutation. Agent 2 can develop against it independently.
+- `services/integration_contracts.py` and `contracts/`: typed/versioned budget and tender-submission contracts. Shape validation does not establish a real human approval or trusted-store authorisation.
+
+Do not open/import raw BCT sources, unrelated data/notebooks or real tender records for this baseline. No trade-cost estimate, cost-per-GFA prediction or winning-bidder recommendation is included. Preserve original titles, evidence limitations and explicit quantity/rate units. Arithmetic stays in Python; the LLM interprets/explains. Do not infer employee salaries, legal defaults or proven inflation from tender charges.
+
+## Checks — no paid API calls
+
+```powershell
+uv run pytest -q
+uv run ruff check app.py hybrid_inputs.py journey_inputs.py services scripts tests
+uv run python -m compileall -q app.py hybrid_inputs.py journey_inputs.py services scripts tests
+```
+
+On Windows the existing `scripts/check.ps1` also runs a zero-call evaluation dry run. In this restricted workstation use its unique project-local pytest scratch setup if the default temporary directory is inaccessible. Real-model behaviour is evaluated separately from calculations/controller tests. Native Excel is not exercised by XML/formula/cached-value checks.
+
+After staging reviewed files, run `uv run python -m scripts.audit_shareable` to inspect the complete index and verify exclusions without printing secrets. It rejects unlabelled datasets, unexpected binaries/paths and credential-shaped values; it complements manual privacy review rather than replacing it.
+
+Regenerate the integration fixture/schemas with `uv run python -m scripts.build_integration_example`. Regenerate existing invented schedules only with `scripts.generate_synthetic`. Live runners require explicit `--allow-live`; do not add that flag for collaboration preparation. Existing usage ceilings/counters and completed private traces are preserved. The reserved evaluation set must not be used for development tuning or claimed as a scored result before a frozen human-reviewed evaluation.
+
+## Git workflow and publication
+
+`main` is the reviewed shared baseline. The owner works on `feature/agent1`; after the authorised first push and invitation, the teammate clones and creates `feature/agent2` from `origin/main`. Push each person's own branch, open tested increments as PRs to `main`, review shared changes and regularly merge `origin/main` into working branches. Do not force-push, reset shared history or discard the other person's changes. Exact first-push, invitation, clone and conflict-resolution steps are in [COLLABORATION.md](docs/COLLABORATION.md).
+
+Local preparation does not push, invite collaborators, change repository visibility, deploy or populate historical evidence. API credentials, private notes, local DBs/uploads/outputs, raw documents, environments/caches and logs are excluded. [BASELINE_FILES.md](docs/BASELINE_FILES.md) describes the intended shareable set.

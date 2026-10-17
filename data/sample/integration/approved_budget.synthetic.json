@@ -1,0 +1,413 @@
+{
+  "schema_version": "1.0",
+  "synthetic": true,
+  "label": "SYNTHETIC APPROVED-BUDGET EXAMPLE — NOT A REAL APPROVAL OR TENDER",
+  "revision": 1,
+  "contract": {
+    "start_year": 2024,
+    "start_date": "2024-01-01",
+    "base_years": 4,
+    "option_years": 2,
+    "period_basis": "exact date",
+    "currency": "SGD"
+  },
+  "roles": [
+    {
+      "role_id": "fm",
+      "original_title": "Facilities Manager",
+      "mapped_benchmark_role": "Facilities Manager",
+      "matched_budget_role_id": null,
+      "responsibility_ids": [
+        "oversight"
+      ],
+      "duties": "FM contract oversight and vendor coordination",
+      "quantity": 1.0,
+      "quantity_unit": "headcount",
+      "quantity_basis": "Officer-selected one-person scenario for oversight; workload rule unavailable",
+      "monthly_rate": 8000.0,
+      "rate_unit": "inclusive monthly per head",
+      "source_rate_basis": "Inclusive monthly tender charge per full-time person; not employee salary",
+      "rate_pricing_year": 2024,
+      "evidence_refs": [
+        "rate-fm"
+      ],
+      "assumption_refs": [
+        "deployment-fm",
+        "future-fm"
+      ],
+      "years": [
+        {
+          "contract_year": 1,
+          "pricing_year": 2024,
+          "period_start": "2024-01-01",
+          "period_end": "2024-12-31",
+          "optional": false,
+          "quantity": 1.0,
+          "monthly_unit_rate": 8000.0,
+          "annual_adjustment": 0.0,
+          "annual_cost": 96000.0
+        },
+        {
+          "contract_year": 2,
+          "pricing_year": 2025,
+          "period_start": "2025-01-01",
+          "period_end": "2025-12-31",
+          "optional": false,
+          "quantity": 1.0,
+          "monthly_unit_rate": 8200.0,
+          "annual_adjustment": 0.0,
+          "annual_cost": 98400.0
+        },
+        {
+          "contract_year": 3,
+          "pricing_year": 2026,
+          "period_start": "2026-01-01",
+          "period_end": "2026-12-31",
+          "optional": false,
+          "quantity": 1.0,
+          "monthly_unit_rate": 8405.0,
+          "annual_adjustment": 0.0,
+          "annual_cost": 100860.0
+        },
+        {
+          "contract_year": 4,
+          "pricing_year": 2027,
+          "period_start": "2027-01-01",
+          "period_end": "2027-12-31",
+          "optional": false,
+          "quantity": 1.0,
+          "monthly_unit_rate": 8615.13,
+          "annual_adjustment": 0.0,
+          "annual_cost": 103381.56
+        },
+        {
+          "contract_year": 5,
+          "pricing_year": 2028,
+          "period_start": "2028-01-01",
+          "period_end": "2028-12-31",
+          "optional": true,
+          "quantity": 1.0,
+          "monthly_unit_rate": 8830.51,
+          "annual_adjustment": 0.0,
+          "annual_cost": 105966.12
+        },
+        {
+          "contract_year": 6,
+          "pricing_year": 2029,
+          "period_start": "2029-01-01",
+          "period_end": "2029-12-31",
+          "optional": true,
+          "quantity": 1.0,
+          "monthly_unit_rate": 9051.27,
+          "annual_adjustment": 0.0,
+          "annual_cost": 108615.24
+        }
+      ]
+    },
+    {
+      "role_id": "tech",
+      "original_title": "Technician",
+      "mapped_benchmark_role": "Technician",
+      "matched_budget_role_id": null,
+      "responsibility_ids": [
+        "technical"
+      ],
+      "duties": "One technical response post covered continuously",
+      "quantity": 5.0,
+      "quantity_unit": "headcount",
+      "quantity_basis": "Officer-confirmed illustrative 44 gross hours and 1.15 relief factor; round to dedicated personnel",
+      "monthly_rate": 3900.0,
+      "rate_unit": "inclusive monthly per head",
+      "source_rate_basis": "Inclusive monthly tender charge per full-time person; not employee salary",
+      "rate_pricing_year": 2024,
+      "evidence_refs": [
+        "rate-tech"
+      ],
+      "assumption_refs": [
+        "deployment-tech",
+        "future-tech"
+      ],
+      "years": [
+        {
+          "contract_year": 1,
+          "pricing_year": 2024,
+          "period_start": "2024-01-01",
+          "period_end": "2024-12-31",
+          "optional": false,
+          "quantity": 5.0,
+          "monthly_unit_rate": 3900.0,
+          "annual_adjustment": 0.0,
+          "annual_cost": 234000.0
+        },
+        {
+          "contract_year": 2,
+          "pricing_year": 2025,
+          "period_start": "2025-01-01",
+          "period_end": "2025-12-31",
+          "optional": false,
+          "quantity": 5.0,
+          "monthly_unit_rate": 4017.0,
+          "annual_adjustment": 0.0,
+          "annual_cost": 241020.0
+        },
+        {
+          "contract_year": 3,
+          "pricing_year": 2026,
+          "period_start": "2026-01-01",
+          "period_end": "2026-12-31",
+          "optional": false,
+          "quantity": 5.0,
+          "monthly_unit_rate": 4137.51,
+          "annual_adjustment": 0.0,
+          "annual_cost": 248250.6
+        },
+        {
+          "contract_year": 4,
+          "pricing_year": 2027,
+          "period_start": "2027-01-01",
+          "period_end": "2027-12-31",
+          "optional": false,
+          "quantity": 5.0,
+          "monthly_unit_rate": 4261.64,
+          "annual_adjustment": 0.0,
+          "annual_cost": 255698.4
+        },
+        {
+          "contract_year": 5,
+          "pricing_year": 2028,
+          "period_start": "2028-01-01",
+          "period_end": "2028-12-31",
+          "optional": true,
+          "quantity": 5.0,
+          "monthly_unit_rate": 4389.49,
+          "annual_adjustment": 0.0,
+          "annual_cost": 263369.4
+        },
+        {
+          "contract_year": 6,
+          "pricing_year": 2029,
+          "period_start": "2029-01-01",
+          "period_end": "2029-12-31",
+          "optional": true,
+          "quantity": 5.0,
+          "monthly_unit_rate": 4521.17,
+          "annual_adjustment": 0.0,
+          "annual_cost": 271270.2
+        }
+      ]
+    },
+    {
+      "role_id": "events",
+      "original_title": "Events Manager",
+      "mapped_benchmark_role": null,
+      "matched_budget_role_id": null,
+      "responsibility_ids": [
+        "events"
+      ],
+      "duties": "Venue event coordination and bookings",
+      "quantity": 1.0,
+      "quantity_unit": "headcount",
+      "quantity_basis": "Officer-selected scenario; no validated event workload rule",
+      "monthly_rate": 5000.0,
+      "rate_unit": "inclusive monthly per head",
+      "source_rate_basis": "Inclusive monthly tender charge per full-time person; not employee salary",
+      "rate_pricing_year": 2024,
+      "evidence_refs": [
+        "rate-events"
+      ],
+      "assumption_refs": [
+        "deployment-events",
+        "future-events"
+      ],
+      "years": [
+        {
+          "contract_year": 1,
+          "pricing_year": 2024,
+          "period_start": "2024-01-01",
+          "period_end": "2024-12-31",
+          "optional": false,
+          "quantity": 1.0,
+          "monthly_unit_rate": 5000.0,
+          "annual_adjustment": 0.0,
+          "annual_cost": 60000.0
+        },
+        {
+          "contract_year": 2,
+          "pricing_year": 2025,
+          "period_start": "2025-01-01",
+          "period_end": "2025-12-31",
+          "optional": false,
+          "quantity": 1.0,
+          "monthly_unit_rate": 5100.0,
+          "annual_adjustment": 0.0,
+          "annual_cost": 61200.0
+        },
+        {
+          "contract_year": 3,
+          "pricing_year": 2026,
+          "period_start": "2026-01-01",
+          "period_end": "2026-12-31",
+          "optional": false,
+          "quantity": 1.0,
+          "monthly_unit_rate": 5202.0,
+          "annual_adjustment": 0.0,
+          "annual_cost": 62424.0
+        },
+        {
+          "contract_year": 4,
+          "pricing_year": 2027,
+          "period_start": "2027-01-01",
+          "period_end": "2027-12-31",
+          "optional": false,
+          "quantity": 1.0,
+          "monthly_unit_rate": 5306.04,
+          "annual_adjustment": 0.0,
+          "annual_cost": 63672.48
+        },
+        {
+          "contract_year": 5,
+          "pricing_year": 2028,
+          "period_start": "2028-01-01",
+          "period_end": "2028-12-31",
+          "optional": true,
+          "quantity": 1.0,
+          "monthly_unit_rate": 5412.16,
+          "annual_adjustment": 0.0,
+          "annual_cost": 64945.92
+        },
+        {
+          "contract_year": 6,
+          "pricing_year": 2029,
+          "period_start": "2029-01-01",
+          "period_end": "2029-12-31",
+          "optional": true,
+          "quantity": 1.0,
+          "monthly_unit_rate": 5520.4,
+          "annual_adjustment": 0.0,
+          "annual_cost": 66244.8
+        }
+      ]
+    }
+  ],
+  "excluded_roles": [],
+  "assumptions": [
+    {
+      "assumption_id": "deployment-fm",
+      "description": "SYNTHETIC: Officer-selected one-person scenario for oversight; workload rule unavailable"
+    },
+    {
+      "assumption_id": "future-fm",
+      "description": "SYNTHETIC: Officer scenario: constant 2.5% tender-price change; causes unknown"
+    },
+    {
+      "assumption_id": "deployment-tech",
+      "description": "SYNTHETIC: Officer-confirmed illustrative 44 gross hours and 1.15 relief factor; round to dedicated personnel"
+    },
+    {
+      "assumption_id": "future-tech",
+      "description": "SYNTHETIC: Officer scenario: constant 3% tender-price change; causes unknown"
+    },
+    {
+      "assumption_id": "deployment-events",
+      "description": "SYNTHETIC: Officer-selected scenario; no validated event workload rule"
+    },
+    {
+      "assumption_id": "future-events",
+      "description": "SYNTHETIC: Officer-selected constant 2% scenario, no supporting schedule"
+    }
+  ],
+  "evidence": [
+    {
+      "evidence_id": "rate-fm",
+      "kind": "synthetic fixture",
+      "label": "SYNTHETIC inclusive monthly rate; no market validation",
+      "record_ids": [
+        "SYN-T01-R01-awarded-Y1",
+        "SYN-T02-R01-awarded-Y1",
+        "SYN-T03-R01-awarded-Y1",
+        "SYN-T04-R01-awarded-Y1",
+        "SYN-T05-R01-awarded-Y1",
+        "SYN-T06-R01-awarded-Y1",
+        "SYN-T07-R01-awarded-Y1"
+      ],
+      "limitations": [
+        "Synthetic inclusive quotes. No salary breakdown. No verified experience-price relationship.",
+        "Synthetic example only; unsupported roles use invented officer allowances."
+      ]
+    },
+    {
+      "evidence_id": "rate-tech",
+      "kind": "synthetic fixture",
+      "label": "SYNTHETIC inclusive monthly rate; no market validation",
+      "record_ids": [
+        "SYN-T01-R05-awarded-Y1",
+        "SYN-T02-R05-awarded-Y1",
+        "SYN-T03-R05-awarded-Y1",
+        "SYN-T04-R05-awarded-Y1",
+        "SYN-T05-R05-awarded-Y1",
+        "SYN-T06-R05-awarded-Y1",
+        "SYN-T07-R05-awarded-Y1"
+      ],
+      "limitations": [
+        "Synthetic inclusive quotes. No salary breakdown. No verified experience-price relationship.",
+        "Synthetic example only; unsupported roles use invented officer allowances."
+      ]
+    },
+    {
+      "evidence_id": "rate-events",
+      "kind": "officer assumption",
+      "label": "SYNTHETIC inclusive monthly rate; no market validation",
+      "record_ids": [],
+      "limitations": [
+        "Synthetic inclusive quotes. No salary breakdown. No verified experience-price relationship.",
+        "Synthetic example only; unsupported roles use invented officer allowances."
+      ]
+    }
+  ],
+  "limitations": [
+    "Entirely invented development fixture; not a real approved budget.",
+    "Full-time headcount quantities and future-price assumptions are synthetic officer selections.",
+    "No market validity, legal working-hours standard, roster feasibility or inflation attribution is established.",
+    "This interface fixture does not approve or mutate any saved app project."
+  ],
+  "annual_totals": [
+    {
+      "contract_year": 1,
+      "amount": 390000.0
+    },
+    {
+      "contract_year": 2,
+      "amount": 400620.0
+    },
+    {
+      "contract_year": 3,
+      "amount": 411534.6
+    },
+    {
+      "contract_year": 4,
+      "amount": 422752.44
+    },
+    {
+      "contract_year": 5,
+      "amount": 434281.44
+    },
+    {
+      "contract_year": 6,
+      "amount": 446130.24
+    }
+  ],
+  "base_total": 1624907.04,
+  "option_total": 880411.68,
+  "contract_total": 2505318.72,
+  "document_type": "manpower_budget",
+  "budget_id": "SYNTHETIC-BUDGET-001",
+  "source_plan_id": "SYNTHETIC-PLAN-001",
+  "source_plan_version": 1,
+  "status": "approved",
+  "approval": {
+    "actor": "SYNTHETIC TEST OFFICER",
+    "approved_at": "2026-10-17T00:00:00Z",
+    "approval_reference": "SYNTHETIC-APPROVAL-001",
+    "synthetic_approval": true
+  }
+}

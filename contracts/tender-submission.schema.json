@@ -1,0 +1,545 @@
+{
+  "$defs": {
+    "AssumptionReference": {
+      "additionalProperties": false,
+      "properties": {
+        "assumption_id": {
+          "minLength": 1,
+          "title": "Assumption Id",
+          "type": "string"
+        },
+        "description": {
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "assumption_id",
+        "description"
+      ],
+      "title": "AssumptionReference",
+      "type": "object"
+    },
+    "ContractPeriod": {
+      "additionalProperties": false,
+      "properties": {
+        "start_year": {
+          "maximum": 2200,
+          "minimum": 1900,
+          "title": "Start Year",
+          "type": "integer"
+        },
+        "start_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Date"
+        },
+        "base_years": {
+          "maximum": 20,
+          "minimum": 1,
+          "title": "Base Years",
+          "type": "integer"
+        },
+        "option_years": {
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Option Years",
+          "type": "integer"
+        },
+        "period_basis": {
+          "enum": [
+            "exact date",
+            "illustrative annual boundaries"
+          ],
+          "title": "Period Basis",
+          "type": "string"
+        },
+        "currency": {
+          "const": "SGD",
+          "default": "SGD",
+          "title": "Currency",
+          "type": "string"
+        }
+      },
+      "required": [
+        "start_year",
+        "base_years",
+        "option_years",
+        "period_basis"
+      ],
+      "title": "ContractPeriod",
+      "type": "object"
+    },
+    "EvidenceReference": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_id": {
+          "minLength": 1,
+          "title": "Evidence Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "synthetic fixture",
+            "officer assumption",
+            "validated tender evidence"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "record_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Record Ids",
+          "type": "array"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "evidence_id",
+        "kind",
+        "label"
+      ],
+      "title": "EvidenceReference",
+      "type": "object"
+    },
+    "ExcludedRole": {
+      "additionalProperties": false,
+      "properties": {
+        "role_id": {
+          "minLength": 1,
+          "title": "Role Id",
+          "type": "string"
+        },
+        "original_title": {
+          "minLength": 1,
+          "title": "Original Title",
+          "type": "string"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "proposed_quantity": {
+          "const": 0,
+          "default": 0,
+          "title": "Proposed Quantity",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "role_id",
+        "original_title",
+        "reason"
+      ],
+      "title": "ExcludedRole",
+      "type": "object"
+    },
+    "PricedRole": {
+      "additionalProperties": false,
+      "properties": {
+        "role_id": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Role Id",
+          "type": "string"
+        },
+        "original_title": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Original Title",
+          "type": "string"
+        },
+        "mapped_benchmark_role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mapped Benchmark Role"
+        },
+        "matched_budget_role_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Matched Budget Role Id"
+        },
+        "responsibility_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Responsibility Ids",
+          "type": "array"
+        },
+        "duties": {
+          "default": "",
+          "title": "Duties",
+          "type": "string"
+        },
+        "quantity": {
+          "exclusiveMinimum": 0,
+          "maximum": 10000,
+          "title": "Quantity",
+          "type": "number"
+        },
+        "quantity_unit": {
+          "enum": [
+            "headcount",
+            "FTE"
+          ],
+          "title": "Quantity Unit",
+          "type": "string"
+        },
+        "quantity_basis": {
+          "minLength": 1,
+          "title": "Quantity Basis",
+          "type": "string"
+        },
+        "monthly_rate": {
+          "exclusiveMinimum": 0,
+          "title": "Monthly Rate",
+          "type": "number"
+        },
+        "rate_unit": {
+          "enum": [
+            "inclusive monthly per head",
+            "inclusive monthly per FTE"
+          ],
+          "title": "Rate Unit",
+          "type": "string"
+        },
+        "source_rate_basis": {
+          "minLength": 1,
+          "title": "Source Rate Basis",
+          "type": "string"
+        },
+        "rate_pricing_year": {
+          "maximum": 2200,
+          "minimum": 1900,
+          "title": "Rate Pricing Year",
+          "type": "integer"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "assumption_refs": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Assumption Refs",
+          "type": "array"
+        },
+        "years": {
+          "items": {
+            "$ref": "#/$defs/RoleYearAmount"
+          },
+          "minItems": 1,
+          "title": "Years",
+          "type": "array"
+        }
+      },
+      "required": [
+        "role_id",
+        "original_title",
+        "quantity",
+        "quantity_unit",
+        "quantity_basis",
+        "monthly_rate",
+        "rate_unit",
+        "source_rate_basis",
+        "rate_pricing_year",
+        "evidence_refs",
+        "assumption_refs",
+        "years"
+      ],
+      "title": "PricedRole",
+      "type": "object"
+    },
+    "RoleYearAmount": {
+      "additionalProperties": false,
+      "properties": {
+        "contract_year": {
+          "maximum": 20,
+          "minimum": 1,
+          "title": "Contract Year",
+          "type": "integer"
+        },
+        "pricing_year": {
+          "maximum": 2200,
+          "minimum": 1900,
+          "title": "Pricing Year",
+          "type": "integer"
+        },
+        "period_start": {
+          "format": "date",
+          "title": "Period Start",
+          "type": "string"
+        },
+        "period_end": {
+          "format": "date",
+          "title": "Period End",
+          "type": "string"
+        },
+        "optional": {
+          "title": "Optional",
+          "type": "boolean"
+        },
+        "quantity": {
+          "exclusiveMinimum": 0,
+          "maximum": 10000,
+          "title": "Quantity",
+          "type": "number"
+        },
+        "monthly_unit_rate": {
+          "exclusiveMinimum": 0,
+          "title": "Monthly Unit Rate",
+          "type": "number"
+        },
+        "annual_adjustment": {
+          "default": 0,
+          "description": "Separately evidenced annual policy/component addition; not a trade-cost allowance",
+          "minimum": 0,
+          "title": "Annual Adjustment",
+          "type": "number"
+        },
+        "annual_cost": {
+          "minimum": 0,
+          "title": "Annual Cost",
+          "type": "number"
+        }
+      },
+      "required": [
+        "contract_year",
+        "pricing_year",
+        "period_start",
+        "period_end",
+        "optional",
+        "quantity",
+        "monthly_unit_rate",
+        "annual_cost"
+      ],
+      "title": "RoleYearAmount",
+      "type": "object"
+    },
+    "YearTotal": {
+      "additionalProperties": false,
+      "properties": {
+        "contract_year": {
+          "maximum": 20,
+          "minimum": 1,
+          "title": "Contract Year",
+          "type": "integer"
+        },
+        "amount": {
+          "minimum": 0,
+          "title": "Amount",
+          "type": "number"
+        }
+      },
+      "required": [
+        "contract_year",
+        "amount"
+      ],
+      "title": "YearTotal",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "synthetic": {
+      "title": "Synthetic",
+      "type": "boolean"
+    },
+    "label": {
+      "minLength": 1,
+      "title": "Label",
+      "type": "string"
+    },
+    "revision": {
+      "minimum": 1,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "contract": {
+      "$ref": "#/$defs/ContractPeriod"
+    },
+    "roles": {
+      "items": {
+        "$ref": "#/$defs/PricedRole"
+      },
+      "minItems": 1,
+      "title": "Roles",
+      "type": "array"
+    },
+    "excluded_roles": {
+      "items": {
+        "$ref": "#/$defs/ExcludedRole"
+      },
+      "title": "Excluded Roles",
+      "type": "array"
+    },
+    "assumptions": {
+      "items": {
+        "$ref": "#/$defs/AssumptionReference"
+      },
+      "minItems": 1,
+      "title": "Assumptions",
+      "type": "array"
+    },
+    "evidence": {
+      "items": {
+        "$ref": "#/$defs/EvidenceReference"
+      },
+      "minItems": 1,
+      "title": "Evidence",
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "annual_totals": {
+      "items": {
+        "$ref": "#/$defs/YearTotal"
+      },
+      "minItems": 1,
+      "title": "Annual Totals",
+      "type": "array"
+    },
+    "base_total": {
+      "minimum": 0,
+      "title": "Base Total",
+      "type": "number"
+    },
+    "option_total": {
+      "minimum": 0,
+      "title": "Option Total",
+      "type": "number"
+    },
+    "contract_total": {
+      "minimum": 0,
+      "title": "Contract Total",
+      "type": "number"
+    },
+    "document_type": {
+      "const": "tender_submission",
+      "default": "tender_submission",
+      "title": "Document Type",
+      "type": "string"
+    },
+    "submission_id": {
+      "minLength": 1,
+      "title": "Submission Id",
+      "type": "string"
+    },
+    "tender_id": {
+      "minLength": 1,
+      "title": "Tender Id",
+      "type": "string"
+    },
+    "tenderer_id": {
+      "minLength": 1,
+      "title": "Tenderer Id",
+      "type": "string"
+    },
+    "budget_id": {
+      "minLength": 1,
+      "title": "Budget Id",
+      "type": "string"
+    },
+    "budget_revision": {
+      "minimum": 1,
+      "title": "Budget Revision",
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "submitted"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "submitted_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Submitted At"
+    }
+  },
+  "required": [
+    "synthetic",
+    "label",
+    "revision",
+    "contract",
+    "roles",
+    "assumptions",
+    "evidence",
+    "annual_totals",
+    "base_total",
+    "option_total",
+    "contract_total",
+    "submission_id",
+    "tender_id",
+    "tenderer_id",
+    "budget_id",
+    "budget_revision",
+    "status"
+  ],
+  "title": "TenderSubmission",
+  "type": "object"
+}
