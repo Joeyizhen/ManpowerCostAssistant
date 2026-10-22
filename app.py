@@ -9,6 +9,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from agent2_track4_views import render_agent2_track4
 from agent2_views import render_agent2_track3
 from hybrid_inputs import render_inputs
 from services.agent import AgentError, converse, create_client
@@ -111,7 +112,7 @@ if st.session_state.selected_track is None:
     st.caption("FM MANPOWER COST ASSISTANT")
     st.title("What would you like to do?")
     st.write("Choose a starting point. We’ll work through it together, one step at a time.")
-    build, review, tender = st.columns(3, gap="large")
+    build, review, tender, proposal = st.columns(4, gap="large")
     with build:
         with st.container(border=True):
             st.caption("TRACK 1")
@@ -138,6 +139,14 @@ if st.session_state.selected_track is None:
             if st.button("Start comparing", key="choose_track_3", width="stretch"):
                 st.session_state.selected_track = 3
                 st.rerun()
+    with proposal:
+        with st.container(border=True):
+            st.caption("AGENT 2 · TRACK 4")
+            st.subheader("Review and compare tenderer proposals")
+            st.write("Spot unusual pricing, understand key differences and know what to clarify.")
+            if st.button("Start tender review", key="choose_track_4", width="stretch"):
+                st.session_state.selected_track = 4
+                st.rerun()
     st.caption(
         "This review release uses labelled synthetic evidence. Your current draft is retained when switching tracks."
     )
@@ -155,6 +164,10 @@ if st.session_state.selected_track == 2:
 
 if st.session_state.selected_track == 3:
     render_agent2_track3()
+    st.stop()
+
+if st.session_state.selected_track == 4:
+    render_agent2_track4()
     st.stop()
 
 records = load_records()

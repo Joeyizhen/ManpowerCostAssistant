@@ -13,11 +13,13 @@ import streamlit as st
 from services.agent2.track3 import (
     REQUIRED_COLUMNS,
     Track3InputError,
+    analysis_input_fingerprint,
     comparability_issues,
     compare_track3,
     export_track3_excel,
     load_synthetic_budget,
     parse_upload,
+    review_readiness,
     role_mapping_options,
     role_mapping_table,
     synthetic_tenderers,
@@ -35,6 +37,7 @@ def _state():
         "agent2_tenderers": {},
         "agent2_budget_source": "",
         "agent2_result": None,
+        "agent2_analysis_fingerprint": None,
         "agent2_role_mappings": None,
         "agent2_role_mappings_confirmed": False,
         "agent2_role_mapping_fingerprint": None,
@@ -43,7 +46,7 @@ def _state():
             "Historical rate comparisons use the records available to this prototype. Synthetic records are demonstration evidence only and must not be treated as verified market prices.",
             "The analysis compares the verified quantities, units, monthly rates and contract years supplied by the reviewer. It does not independently confirm tender compliance, service quality, staffing adequacy or the authenticity of approvals.",
             "Findings and clarification questions are decision-support prompts. They do not reject a tenderer, recommend an award or replace procurement, legal, finance and operational review.",
-            "Source references are derived from uploaded filenames, the first Excel worksheet and row numbers where available. Reviewers must check the original signed submission before relying on a finding.",
+            "Source references are derived from uploaded filenames, matching Excel worksheets and row numbers where available. Reviewers must check the original signed submission before relying on a finding.",
             "Any accepted exception, unresolved clarification, manual role match or excluded cost component should be recorded here before the report is used.",
         ],
         "agent2_demo": False,
@@ -71,6 +74,7 @@ def _save_project_bytes() -> bytes:
         "tenderers": {name: _frame_json(frame) for name, frame in st.session_state.agent2_tenderers.items()},
         "role_mappings": _frame_json(st.session_state.agent2_role_mappings),
         "role_mappings_confirmed": st.session_state.agent2_role_mappings_confirmed,
+        "analysis_fingerprint": st.session_state.agent2_analysis_fingerprint,
         "result": None if result is None else {
             "overall": _frame_json(result.overall), "roles": _frame_json(result.roles),
             "findings": _frame_json(result.findings), "questions": _frame_json(result.questions),
@@ -95,6 +99,7 @@ def _restore_project(content: bytes):
     st.session_state.agent2_tenderers = {name: read_frame(value) for name, value in payload.get("tenderers", {}).items()}
     st.session_state.agent2_role_mappings = read_frame(payload.get("role_mappings"))
     st.session_state.agent2_role_mappings_confirmed = payload.get("role_mappings_confirmed", False)
+    st.session_state.agent2_analysis_fingerprint = payload.get("analysis_fingerprint")
     saved_result = payload.get("result")
     st.session_state.agent2_result = None if saved_result is None else Track3Result(
         overall=read_frame(saved_result["overall"]), roles=read_frame(saved_result["roles"]),
@@ -108,6 +113,49 @@ def _progress(step: int):
     cols = st.columns(len(STEPS))
     for index, label in enumerate(STEPS, 1):
         cols[index - 1].caption(("● " if index == step else "✓ " if index < step else "○ ") + label)
+
+
+def _project_status_header():
+    project = st.session_state.agent2_project
+    if not project:
+        return None
+    readiness = review_readiness(
+        project,
+        st.session_state.agent2_budget,
+        st.session_state.agent2_tenderers,
+        st.session_state.agent2_role_mappings,
+        budget_confirmed=st.session_state.agent2_budget_confirmed,
+        mappings_confirmed=st.session_state.agent2_role_mappings_confirmed,
+        result=st.session_state.agent2_result,
+        analysed_fingerprint=st.session_state.agent2_analysis_fingerprint,
+    )
+    icon = {
+        "checks_required": "⚠",
+        "ready_to_calculate": "●",
+        "stale": "↻",
+        "review_in_progress": "◐",
+        "ready": "✓",
+    }[readiness.status]
+    with st.container(border=True):
+        name, reference, period, status = st.columns([2, 1.2, 1.2, 1.6])
+        name.caption("PROJECT")
+        name.write(f"**{project.get('name', 'Untitled project')}**")
+        reference.caption("TENDER REFERENCE")
+        reference.write(project.get("reference") or "Not recorded")
+        period.caption("CONTRACT PERIOD")
+        base = int(project.get("base_years", project.get("duration", 0)) or 0)
+        option = int(project.get("option_years", 0) or 0)
+        period.write(f"{base} base + {option} option year(s)")
+        status.caption("REVIEW STATUS")
+        status.write(f"**{icon} {readiness.label}**")
+        if readiness.reasons:
+            st.caption("Next: " + " ".join(readiness.reasons))
+    if readiness.status == "stale":
+        st.warning(
+            "The checked manpower data or role matches changed after this analysis was calculated. "
+            "Review the changes and recalculate before using or exporting the findings."
+        )
+    return readiness
 
 
 def _nav(*, back: int | None = None, forward: int | None = None, forward_label: str = "Continue"):
@@ -297,15 +345,23 @@ def render_agent2_track3():
     )
     step = st.session_state.agent2_step
     _progress(step)
+    readiness = _project_status_header()
 
     if st.session_state.agent2_project:
         project_name = st.session_state.agent2_project.get("name", "tender-review").replace(" ", "_")
         st.download_button(
-            "Save project for later",
+            "Download project file to continue later",
             data=_save_project_bytes(),
             file_name=f"{project_name}_Track3_Project.json",
             mime="application/json",
-            help="Download the full working project, including verified data, role matches and officer decisions.",
+            help=(
+                "Downloads a private JSON project file to your computer. Nothing is uploaded or saved "
+                "to a server. Return to Create Project and upload this file to continue later."
+            ),
+        )
+        st.caption(
+            "This downloads your current work as a JSON file. Keep it securely, then use "
+            "‘Resume a saved Track 3 project’ to continue later."
         )
 
     if step == 1:
@@ -564,6 +620,9 @@ def render_agent2_track3():
                     benchmark_year=date.fromisoformat(st.session_state.agent2_project["start"]).year,
                     role_mappings=mapping_dict,
                 )
+                st.session_state.agent2_analysis_fingerprint = analysis_input_fingerprint(
+                    st.session_state.agent2_project, budget, tenderers, mapping
+                )
                 st.session_state.agent2_step = 4
                 st.rerun()
             except Track3InputError as exc:
@@ -693,27 +752,43 @@ def render_agent2_track3():
             st.caption(
                 "🔴 Positive values exceed the approved budget or quantity · 🟠 Negative values are below it · "
                 "‘Comparison with Similar Past Rates’ shows where the submitted monthly rate sits against comparable records; "
-                "‘Number of Comparable Past Records’ shows how many records support that comparison."
+                "‘Similar Past Rates Found’ is the number of earlier rate records used for that comparison."
             )
             st.markdown("#### Findings to review")
             st.caption(
-                "🔴 High: may materially affect affordability, completeness or service coverage · "
-                "🟠 Medium: requires clarification before relying on the comparison · 🟢 Low: note and monitor."
+                "🔴 High: variance is at least 15% or S$250,000, or there is a major coverage gap · "
+                "🟠 Medium: variance is at least 5% or S$50,000 · "
+                "🟢 Low: below both Medium thresholds. These levels prioritise review; they do not decide an award."
             )
             if result.findings.empty:
                 st.success("No findings require review.")
             else:
                 st.dataframe(_finding_style(result.findings.drop(columns=["Review Status", "Officer Comment"], errors="ignore")), hide_index=True, width="stretch")
-                st.markdown("##### Record the officer’s decision")
+                st.markdown("##### Review findings and add notes")
+                st.caption(
+                    "Choose whether each item still needs review, has been checked, or has been resolved. "
+                    "The internal finding reference is retained in the downloaded report but is hidden here."
+                )
+                review_input = result.findings[
+                    ["Finding ID", "Tenderer", "Finding", "Review Status", "Officer Comment"]
+                ].rename(columns={"Review Status": "Decision", "Officer Comment": "Reviewer Notes"})
                 reviewed = st.data_editor(
-                    result.findings[["Finding ID", "Tenderer", "Finding", "Review Status", "Officer Comment"]],
+                    review_input[["Tenderer", "Finding", "Decision", "Reviewer Notes"]],
                     key="agent2_findings_editor",
                     width="stretch", hide_index=True,
                     column_config={
-                        "Review Status": st.column_config.SelectboxColumn(options=["Pending Review", "Reviewed", "Resolved"], required=True),
-                        "Officer Comment": st.column_config.TextColumn(help="Record your decision or accepted exception."),
+                        "Decision": st.column_config.SelectboxColumn(
+                            options=["Pending Review", "Reviewed", "Resolved"], required=True
+                        ),
+                        "Reviewer Notes": st.column_config.TextColumn(
+                            help="Record the conclusion, follow-up or accepted exception."
+                        ),
                     },
-                    disabled=["Finding ID", "Tenderer", "Finding"],
+                    disabled=["Tenderer", "Finding"],
+                )
+                reviewed.insert(0, "Finding ID", review_input["Finding ID"].values)
+                reviewed = reviewed.rename(
+                    columns={"Decision": "Review Status", "Reviewer Notes": "Officer Comment"}
                 )
                 result.findings = result.findings.drop(columns=["Review Status", "Officer Comment"]).merge(
                     reviewed[["Finding ID", "Review Status", "Officer Comment"]], on="Finding ID", how="left"
@@ -725,7 +800,12 @@ def render_agent2_track3():
         if left.button("← Revise verified data", width="stretch"):
             st.session_state.agent2_step = 3
             st.rerun()
-        if right.button("Review and prepare report", type="primary", width="stretch"):
+        if right.button(
+            "Review and prepare report",
+            type="primary",
+            width="stretch",
+            disabled=bool(readiness and not readiness.analysis_is_current),
+        ):
             st.session_state.agent2_step = 5
             st.rerun()
 
@@ -764,7 +844,7 @@ def render_agent2_track3():
             file_name="Track_3_Tender_Review.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             type="primary", width="stretch",
-            disabled=not acknowledged,
+            disabled=not acknowledged or bool(readiness and not readiness.analysis_is_current),
         )
         if acknowledged:
             st.success("Report prepared. Check pending findings before management or procurement discussion.")

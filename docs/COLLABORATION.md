@@ -1,6 +1,6 @@
 # Collaboration guide
 
-This baseline preserves the current Track 1 checkpoint. Incomplete features are listed in [HANDOVER.md](HANDOVER.md); their presence on `main` does not imply a finished release. No remaining tracks are implemented by this collaboration preparation.
+This baseline preserves the current Track 1 checkpoint and the Agent 2 Track 3 tender-comparison prototype. Incomplete features are listed in [HANDOVER.md](HANDOVER.md); their presence does not imply a finished or production-ready release. Track 2 and Tracks 4–5 remain planned.
 
 ## Ownership across five tracks
 
@@ -22,9 +22,10 @@ This baseline preserves the current Track 1 checkpoint. Incomplete features are 
 | Arithmetic and export | `services/calculations.py`, `export.py` | Shared: retain cent rounding, annual/base/option reconciliation and source attribution |
 | Retrieval and title context | `services/evidence.py`, `role_reference.py`, `data/` | Shared: synthetic fixtures only; reviewed titles are not validated prices |
 | Validation and storage | `services/workflow.py`, `storage.py`, `uploads.py` | Shared: owner isolation, revision conflicts and approval invalidation must remain tested |
-| Future Agent 2 | New `services/agent2/` and an Agent 2 UI module such as `agent2_views.py` | Teammate-owned; add only when implementing the agreed tracks, with minimal entry-point changes |
+| Agent 2 Track 3 | `services/agent2/track3.py`, `agent2_views.py`, `tests/test_agent2_track3.py`, `data/templates/Track3_Tenderer_Manpower_Submission_Template.xlsx` | Teammate-owned; preserve deterministic arithmetic, source provenance and decision boundaries |
+| Future Agent 2 Tracks 4–5 | New modules under `services/agent2/` with focused UI/tests | Define reviewed contracts and governance before implementation; keep entry-point changes minimal |
 
-The future locations are a convention, not implemented placeholder tracks. Add focused tests under `tests/` and documentation under `docs/` for each increment. Coordinate tests/fixtures shared across both agents. Agent 2's comparisons, tender assessment and historical maintenance require their own states and permissions; Agent 1's `final` confirmation is not approval of a tender or import.
+Add focused tests under `tests/` and documentation under `docs/` for each increment. Coordinate tests/fixtures shared across both agents. Track 3's comparison state remains separate from future Track 4 assessment and Track 5 historical maintenance permissions; Agent 1's `final` confirmation is not approval of a tender or import.
 
 ## Work and pull requests
 

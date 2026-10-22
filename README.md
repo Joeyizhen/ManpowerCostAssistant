@@ -1,6 +1,6 @@
 # AI-Powered FM Manpower Cost Assistant
 
-Local collaboration baseline for a two-agent/five-track capstone app. Track 1 is a working development journey using labelled synthetic evidence and an optional live OpenAI integration. Its wider six-screen refinement is unfinished. No remaining tracks, shared deployment or historical imports are implemented by this baseline.
+Local collaboration baseline for a two-agent/five-track capstone app. Track 1 is a working development journey using labelled synthetic evidence and an optional live OpenAI integration. Agent 2 Track 3 provides a deterministic tender-to-approved-budget review workflow, and Track 4 provides a synthetic-data prototype for comparing submissions with similar historical tenders. Tracks 2 and 5 remain planned; shared deployment and production historical-data administration are not implemented.
 
 | Owner | Agent | Tracks |
 |---|---|---|
@@ -32,6 +32,12 @@ Enter a brief, start year, base duration and option years (0 for none). Indicate
 Review my manpower plan sends the retained brief, table and supporting text to the real LLM for targeted sanity checks; it does not approve anything. Correct the plan and use the single manpower confirmation before pricing. Rates use one reference year, arithmetic-average starting points when supported, editable sliders/exact inputs and optional assumptions. Unsupported roles retain their titles and need officer rates. The existing future-price, finding, full-contract/chart and Excel controls remain; final approval is an explicit officer action. Editing values invalidates dependent confirmations.
 
 The six separate visible steps, consistent Back/Continue/progress, compact rate/future-price redesign, monthly role-cost column and observed slider band are incomplete. Some numeric missing cells display `None`; narrow tables can scroll horizontally. New current/proposed/zero prompt behaviour has not been rechecked live. Native Excel recalculation, shared hosting and real market validity remain unverified. These are a documented development baseline, not a completed product claim.
+
+## Current Track 3 behaviour
+
+Track 3 creates a tender-review project, confirms the approved-budget reference and revision, verifies multiple tenderer schedules, reviews role matches, compares full-contract and role-level costs, records officer comments/statuses, exports a traceable workbook and saves/resumes project JSON. Comparability checks block missing years, duplicate role-year rows and incompatible headcount/FTE units. Uploads must establish monthly SGD pricing; unsupported currencies and annual/daily/hourly frequencies are rejected rather than silently converted. Excel uploads inspect every worksheet containing a recognised role column and retain filename, worksheet and row provenance.
+
+This is decision support only. Below-budget submissions produce clarification prompts rather than automatic savings or rejection conclusions, and the application does not select a tenderer. Track 3 remains a prototype: it does not authenticate signed approvals, convert currencies or pricing frequencies, extract PDF/Word tables, or establish production access controls.
 
 ## Synthetic evidence and handoff
 

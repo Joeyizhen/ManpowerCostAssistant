@@ -16,6 +16,12 @@ The checkpoint passed **94 automated checks** before collaboration preparation. 
 - `data/sample/integration/approved_budget.synthetic.json` is an invented, explicitly synthetic approved-budget development example, not a real approval or saved officer plan.
 - `scripts/audit_shareable.py` audits the indexed file set, exclusions, credential/private-path patterns and fixture provenance without echoing secret values. `.gitignore` also excludes private original notes, raw documents/records and runtime artifacts. Original setup/protocol files were backed up in ignored local storage before sanitisation.
 
+## Agent 2 Track 3 continuation — 18 October 2026
+
+Track 3 is now implemented as a development prototype in `agent2_views.py` and `services/agent2/track3.py`, with focused regression tests. It supports approved-budget confirmation, multiple tenderers, verified editable schedules, role matching, deterministic comparisons/findings/questions, officer review fields, save/resume and traceable Excel export. Upload validation blocks missing values/years, duplicate role-year rows, incompatible quantity units, unsupported currencies and non-monthly pricing. Excel parsing combines recognised schedule worksheets and retains filename, sheet and row references.
+
+This does not establish production readiness. Approval authenticity, subtotal/declared-total reconciliation, richer base/option analysis, accepted-exception history, reviewer timestamps, access control and PDF/Word extraction remain open work. Track 4 now has a synthetic-data historical-comparison prototype; Track 5 database administration, validation, versioning and access controls are not implemented.
+
 ## Known incomplete work and failures
 
 Six visible steps, consistent Back/Continue/progress, compact rate/future-change controls, a monthly role-cost column, observed slider band and consolidation of findings/full-budget/export are **not finished**. Existing grouped inputs/legacy internal stages remain. Some numeric missing cells display `None`, and narrow tables can require horizontal scrolling. Step fields reserved in models are not implemented navigation.
