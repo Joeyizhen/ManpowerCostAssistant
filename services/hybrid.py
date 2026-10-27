@@ -22,12 +22,12 @@ COMMON_ROLES = [
     "BMS Engineer",
 ]
 STEP_LABELS = [
-    "Project and contract details",
-    "Current and proposed manpower",
-    "Assistant review and manpower confirmation",
-    "Monthly rate selection",
+    "Contract and operating context",
+    "Manpower quantities and their basis",
+    "Review and confirm deployment",
+    "Starting monthly allowances",
     "Future manpower cost changes",
-    "Full contract budget and export",
+    "Your manpower budget",
 ]
 
 
@@ -92,11 +92,15 @@ def quantity_difference(current, proposed):
     return float(proposed) - float(current)
 
 
-def save_project_inputs(plan, brief, year, base, option, kind, name=None, start=None, clear_start=False):
+def save_project_inputs(
+    plan, brief, year, base, option, kind, name=None, start=None, clear_start=False, start_month=...
+):
     candidate = plan.model_copy(deep=True)
     draft = working_draft(candidate)
     payload = draft.profile.model_dump(mode="json")
     payload.update(description=brief.strip(), start_year=year, base_years=base, option_years=option)
+    if start_month is not ...:
+        payload["start_month"] = start_month
     if name is not None:
         payload["name"] = name.strip() or "Untitled project"
     if clear_start:
@@ -117,6 +121,8 @@ def save_project_inputs(plan, brief, year, base, option, kind, name=None, start=
         candidate.contract_kind = kind
         if kind == "new site / service":
             candidate.current_deployment_status = "no existing deployment"
+        elif kind == "existing contract":
+            candidate.current_deployment_status = "known"
         update_notes(
             candidate,
             profile=profile.model_dump(mode="json"),
@@ -167,7 +173,7 @@ def parse_manpower_list(text):
             label, quantity, *notes = values
             note = ", ".join(notes).strip()
         else:
-            match = re.fullmatch(r"(.+?)\s*(?:[:=]|\s+[x×–-])\s*(\d+(?:\.\d+)?)\s*", line)
+            match = re.fullmatch(r"(.+?)\s*(?:[:=]|\s+[xÃ—â€“-])\s*(\d+(?:\.\d+)?)\s*", line)
             if not match:
                 raise ValueError(f"Use Role title, quantity for: {line[:100]}")
             label, quantity = match.groups()

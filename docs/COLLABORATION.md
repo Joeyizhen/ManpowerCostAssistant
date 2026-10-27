@@ -1,6 +1,6 @@
 # Collaboration guide
 
-This baseline preserves the current Track 1 checkpoint. Incomplete features are listed in [HANDOVER.md](HANDOVER.md); their presence on `main` does not imply a finished release. No remaining tracks are implemented by this collaboration preparation.
+This baseline preserves Track 1 and adds an independent three-screen Track 2 review. Readiness and limitations are listed in [HANDOVER.md](HANDOVER.md); local implementation does not imply a finished operational release. Integration with the teammate's Tracks 3/4 is deferred. Existing integration contracts and teammate work are preserved; no cross-track transfer workflow or branch merge is included.
 
 ## Ownership across five tracks
 
@@ -58,7 +58,11 @@ git merge origin/main
 
 For conflicts, inspect both changes, coordinate with the other owner, preserve both intended behaviours, edit the conflict, run affected tests, then `git add` and complete the merge. Do not use blanket ours/theirs selection, discard the other person's work, reset a shared branch, force-push or rewrite published history. If a shared schema changes, agree the version/migration and update both sets of tests before merging.
 
-## First publication and invitation — not yet performed
+## Publication status and historical first-push procedure
+
+Baseline `02cbfc9` was published to the private repository on `main` and `feature/agent1` on 17 October 2026. The teammate is developing Agent 2 on `feature/agent2`. The following first-push/invitation procedure is retained as history; do not repeat it automatically. New pushes, invitations and deployment require their own instruction.
+
+### Historical preparation instructions
 
 The intended repository is `https://github.com/Joeyizhen/ManpowerCostAssistant.git`. Git inspection and an ignored bare audit clone found no remote refs/history and a clone HEAD of `main`. An unauthenticated REST metadata lookup was unavailable; repository visibility, collaborator permissions, branch protection and push rights are not verified. No remote was modified.
 

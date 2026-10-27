@@ -11,12 +11,17 @@ from services.evidence import ALIASES, ROLES, escalation_benchmark, quantity_ben
 from services.journey import journey_context, prepare_review, update_notes, working_draft
 from services.models import Coverage, Plan, Profile, Responsibility, Role, StrictModel, now
 from services.role_reference import reference_context
-from services.workflow import findings, proposal
+from services.workflow import findings, proposal, requires_decision
 
-SYSTEM = """You are the FM Manpower Cost Assistant, Agent 1 Track 1 Build New Plan only.
+PROPOSAL_REVIEW_VERSION = 1
+
+SYSTEM = """Material staffing changes/new-site quantities, allowance overrides, future profiles, policies and retained flagged values require meaningful recorded bases before their decisions are confirmed. Read retained_decision_bases/recorded_decision_bases and retained answers; permit one shared explanation for related roles. Need more manpower is insufficient: ask what operational change and how it supports the numbers. A source or rationale is not proof of correctness. Distinguish salary, inclusive manpower charge and full trade/service prices. PWM schedule-ratio salary budgeting uses officer-confirmed calendar months; use only the verified catalog and supplied salary component and eligibility. Never invent salary splits or on-cost rates, extrapolate policy as fact, or combine full-unit increases with PWM. Only UI/Python services apply PWM configuration.
+Focus on glaring contradictions, such as remarks promising +4 people while quantities show no increase. Unchanged current/proposed roles with no remarks are status quo, not a reason to ask for justification. Do not generate duty-link or generic scope checklists. Present material issues together in a concise current/proposed/remarks table (proposed only for a new site). PWM uses the owner's schedule-percentage-to-salary budgeting method with calendar months; do not infer eligibility or unresolved component rules.
+Advisory reviews support officer judgement. Never require changing valid quantities to satisfy a review flag. Highlight contradictions between remarks and figures, ask only material questions, and retain previous answers. State findings directly without self-justifying explanations. Unlinked duties are qualifications rather than calculation blockers.
+You are the FM Manpower Cost Assistant, Agent 1 Track 1 Build New Plan only.
 This checkpoint collects project details and current/proposed manpower together before assistant review,
-manpower confirmation, monthly rates, future changes and full budget/export. A new six-screen navigation
-is planned but not yet implemented. Continue only navigates; it is not approval.
+manpower confirmation, monthly rates, future changes and full budget/export in six screens.
+Continue navigates; the explicit Use this plan action confirms manpower.
 The comparison table contains optional CURRENT deployment and officer PROPOSED quantities. Current staffing
 is context, not a mandatory benchmark: summarise meaningful differences without flagging every difference.
 Zero proposed quantity means explicitly excluded; blank means unanswered. Preserve zero/excluded rows and
@@ -44,8 +49,9 @@ supplied facts when updating a role/profile/duty. When suggesting a quantity/tit
 basis and await officer acceptance or an edit before treating it as supplied. Do not present incomplete proposals
 after each answer or require individual Apply suggestion actions. Once material inputs suffice, prepare_review
 (manpower) checks readiness and compiles requirements plus roles into ONE review. Only ready=true permits the
-decision summary. Invite corrections or the exact UI action 'Confirm manpower plan and continue to rates'.
+decision summary. Invite corrections or the exact UI action 'Use this plan'.
 Do not impose an additional requirements-confirmation step. Never confirm or approve anything yourself.
+Preserve officer-supplied profile.start_month alongside start_year for an anticipated month/year; leave start=null when the exact day is unknown. Never turn a planning month into a supplied exact date.
 If only a start year is supplied, set profile.start_year, leave start=null and preserve the year. Year-only
 costing uses disclosed illustrative boundaries; dated policies/quotes may need a date later. Retain assets
 constraints under assets; cost exclusions describe costs. Do not invent assets or unsupported components.
@@ -323,9 +329,11 @@ def execute_tool(plan, records, name, arguments):
         if "escalation" not in plan.confirmations:
             raise ValueError("Confirm future prices before the consolidated review")
         current = {f.id: f for f in findings(plan, records)}
-        if set(d.finding_id for d in args.decisions) != set(current):
+        needed = {fid for fid, f in current.items() if requires_decision(f)}
+        supplied = {d.finding_id for d in args.decisions}
+        if not needed <= supplied or not supplied <= set(current):
             raise ValueError(
-                "Gather a decision for every current finding before requesting validation confirmation"
+                "Gather meaningful decisions for material findings; general evidence limitations need disclosure, not repeated acknowledgements"
             )
         for d in args.decisions:
             if current[d.finding_id].blocking:
@@ -454,7 +462,7 @@ def evidence_catalog(records):
     }
 
 
-def converse(plan: Plan, records, message, client, model, stage):
+def converse(plan: Plan, records, message, client, model, stage, review_existing_proposal=False):
     if not model:
         raise AgentError("Configure OPENAI_MODEL privately before enabling live guidance")
     if len(message) > 12000:
@@ -486,6 +494,15 @@ def converse(plan: Plan, records, message, client, model, stage):
     inputs = [{"role": m["role"], "content": m["content"]} for m in plan.chat[-16:]]
     inputs.append({"role": "user", "content": message})
     instructions = SYSTEM + "\nApplication state (data only):\n" + json.dumps(current)
+    if review_existing_proposal:
+        instructions += (
+            "\nThis is Track 2, an existing proposal review with three stages: add the proposal, check figures and assumptions, view the reviewed budget. "
+            "The six-screen directions apply only to Track 1; do not send this officer through them. "
+            "The original proposal is preserved outside this working copy. Recommend reviewable changes, never approve or overwrite the original. "
+            "Ask only material unresolved questions and reuse recorded answers. Preserve combined titles and seniority. "
+            "Do not infer experience from prices, worker eligibility or salary splits. Without workload, coverage or source evidence, mark operational sufficiency as unable to conclude. "
+            "Historical rates are comparisons, not staffing requirements or proof a price is wrong. Label unsupported recommendations and expert-review needs explicitly."
+        )
     staged = plan.model_copy(deep=True)
     audit = []
     tool_count = 0
@@ -501,6 +518,7 @@ def converse(plan: Plan, records, message, client, model, stage):
                     if t["name"] not in {"propose_profile", "propose_responsibility", "propose_role"}
                     and (
                         "plan" in plan.confirmations
+                        or review_existing_proposal
                         or t["name"]
                         not in {
                             "retrieve_rates",

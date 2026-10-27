@@ -6,6 +6,7 @@ from math import ceil
 
 from services.evidence import quoted_schedule
 from services.models import Coverage, Plan
+from services.pwm import salary_months, validate_pwm
 
 
 def D(value):
@@ -106,12 +107,14 @@ def budget(plan: Plan, records: list[dict], scenario_delta=0):
                 raise ValueError(
                     "Quoted prices already price each target year; extra escalation is prohibited"
                 )
+        if role.pwm:
+            validate_pwm(role, p)
         previous_rate = D(role.rate)
         for year in range(1, p.years + 1):
             start = anniversary(p.costing_start, year - 1)
             end = anniversary(p.costing_start, year)
             quantity = D(role.yearly_quantities[year - 1] if role.yearly_quantities else role.quantity)
-            change = role.escalation[year - 1] + (scenario_delta if year > 1 and quotes is None else 0)
+            change = role.escalation[year - 1] + (scenario_delta if year > 1 and quotes is None and not role.pwm else 0)
             if not -0.5 <= change <= 1:
                 raise ValueError("Scenario escalation exceeds permitted numeric bounds")
             monthly = (
@@ -134,7 +137,11 @@ def budget(plan: Plan, records: list[dict], scenario_delta=0):
                 policy_annual += D(policy.annual_monthly_increment) * 12 * proportion
             before_policy = cents(quantity * monthly * 12)
             policy_cost = cents(quantity * policy_annual)
-            annual = cents(D(before_policy) + D(policy_cost))
+            pwm_months = salary_months(role, p, year) if role.pwm else []
+            pwm_salary = cents(sum((D(m["salary_change"]) for m in pwm_months), D(0)))
+            pwm_oncost = cents(sum((D(m["employer_oncost_change"]) for m in pwm_months), D(0)))
+            pwm_cost = cents(D(pwm_salary) + D(pwm_oncost))
+            annual = cents(D(before_policy) + D(policy_cost) + D(pwm_cost))
             flat = cents(quantity * D(role.rate) * 12)
             rows.append(
                 {
@@ -153,11 +160,15 @@ def budget(plan: Plan, records: list[dict], scenario_delta=0):
                     "policy_annual_per_head": float(policy_annual),
                     "policy_cost": policy_cost,
                     "annual_cost": annual,
+                    "pwm_salary_cost": pwm_salary,
+                    "pwm_oncost_cost": pwm_oncost,
+                    "pwm_cost": pwm_cost,
+                    "pwm_months": pwm_months,
                     "flat_baseline": flat,
                     "excess_over_baseline": cents(D(annual) - D(flat)),
                     "source_record": quotes[year - 1]["record_id"]
                     if quotes
-                    else "Officer-confirmed escalation assumption",
+                    else ("Official schedule salary-ratio budgeting method; see PWM monthly trace" if role.pwm else "Officer-confirmed escalation assumption"),
                 }
             )
             previous_rate = monthly
@@ -182,7 +193,7 @@ def budget(plan: Plan, records: list[dict], scenario_delta=0):
             "total": total,
             "method": "Sum confirmed yearly quantities × Year 1 rate × 12; add each year's excess. Includes policy amounts.",
         },
-        "rounding": "Monthly unit rate rounded to cents, role/year annual and policy costs rounded to cents, then summed.",
+        "rounding": "Monthly unit rate and PWM salary per worker rounded to cents; annual salary/on-cost and role/year policy aggregates rounded separately, then summed. Payroll statutory rounding is not inferred.",
         "period_basis": p.period_basis,
     }
 
@@ -236,7 +247,7 @@ def sensitivity(plan, records):
                 "annual_change_delta": delta,
                 "annual_totals": output["annual_totals"],
                 "contract_total": output["contract_total"],
-                "method": "Shift each assumed Year 2+ rate change by ±1 percentage point. Quantities, quoted prices and additive nominal policies unchanged. Not confidence intervals.",
+                "method": "Shift each assumed Year 2+ rate change by ±1 percentage point. Quantities, quoted prices, PWM salary paths and additive nominal policies unchanged. Not confidence intervals.",
             }
         )
     return result

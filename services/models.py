@@ -22,6 +22,7 @@ class Profile(StrictModel):
     description: str = ""
     start: date | None = None
     start_year: int | None = Field(default=None, ge=1900, le=2200)
+    start_month: int | None = Field(default=None, ge=1, le=12)
     base_years: int | None = Field(default=None, ge=1, le=20)
     option_years: int | None = Field(default=None, ge=0, le=20)
     operational_type: str | None = None
@@ -35,14 +36,20 @@ class Profile(StrictModel):
 
     @property
     def costing_start(self):
-        return self.start or (date(self.start_year, 1, 1) if self.start_year is not None else None)
+        return self.start or (
+            date(self.start_year, self.start_month or 1, 1) if self.start_year is not None else None
+        )
 
     @property
     def period_basis(self):
         return (
             "Exact officer-supplied contract start date"
             if self.start
-            else "Start year only; 1 January is an illustrative annual costing boundary, not a supplied start date. Exact dates are required for policies or calendar-year quotes."
+            else (
+                "Anticipated start month/year; the first day of that month is an illustrative costing boundary, not a supplied exact date. Exact dates are required for policies or calendar-year quotes."
+                if self.start_month is not None
+                else "Start year only; 1 January is an illustrative annual costing boundary, not a supplied start date. Exact dates are required for policies or calendar-year quotes."
+            )
         )
 
     @property
@@ -79,6 +86,36 @@ class PolicyAdjustment(StrictModel):
     # Increment is a monthly absolute amount per head, applied prospectively and prorated by month.
 
 
+class DecisionBasis(StrictModel):
+    kind: Literal["quantity", "rate", "escalation", "policy"]
+    role_ids: list[str]
+    category: str
+    explanation: str
+    source: str = ""
+    classification: Literal["sourced evidence", "officer assumption", "acknowledged uncertainty"]
+    snapshots: dict[str, dict]
+    signatures: dict[str, str]
+    periods: str
+    recorded_at: str = Field(default_factory=now)
+
+
+class PWMConfig(StrictModel):
+    schedule_digest: str = ""
+    schedule_id: str
+    covered_quantity: int = Field(gt=0, le=10000)
+    starting_salary: float = Field(gt=0)
+    salary_source: str
+    applicability_basis: str
+    applicability_confirmed: bool = False
+    remainder_flat_confirmed: bool = False
+    oncost_rate: float = Field(default=0, ge=0, le=1)
+    oncost_source: str = ""
+    beyond_published: Literal["unselected", "hold last salary", "officer annual assumption"] = "unselected"
+    beyond_rate: float = Field(default=0, ge=-0.5, le=1)
+    beyond_reason: str = ""
+    rationale: str
+
+
 class Role(StrictModel):
     id: str = Field(min_length=1, max_length=80)
     label: str = Field(min_length=1, max_length=160)
@@ -109,6 +146,7 @@ class Role(StrictModel):
     escalation_reason: str = ""
     escalation_mode: Literal["assumption", "quoted schedule"] = "assumption"
     schedule_id: str | None = None
+    pwm: PWMConfig | None = None
     yearly_quantities: list[float] = Field(default_factory=list)
     policies: list[PolicyAdjustment] = Field(default_factory=list)
 
@@ -176,6 +214,8 @@ class Plan(StrictModel):
     final_officer: str = ""
     final_date: str = ""
     synthetic: bool = True
+    decision_bases: list[DecisionBasis] = Field(default_factory=list)
+    basis_drafts: dict = Field(default_factory=dict)
 
 
 STAGES = [

@@ -21,6 +21,12 @@ ROOT_FILES = {
     "app.py",
     "hybrid_inputs.py",
     "journey_inputs.py",
+    "decision_inputs.py",
+    "future_inputs.py",
+    "pricing_inputs.py",
+    "proposal_inputs.py",
+    "review_inputs.py",
+    "ui_drafts.py",
 }
 EXCLUDED_PROBES = [
     ".env",
@@ -70,6 +76,7 @@ def allowed(path):
         "evaluation/TOOLS.md",
         "evaluation/cases.json",
         "data/reference/role_titles.json",
+        "data/reference/pwm-2026-10-19.json",
     }:
         return True
     return p.parts[:2] == ("data", "sample") and p.suffix in {".json", ".md"}
@@ -103,6 +110,17 @@ def issues_for(path, content):
                 issues.append("dataset lacks explicit synthetic provenance")
         except (ValueError, AttributeError):
             issues.append("invalid synthetic JSON fixture")
+    if path == "data/reference/pwm-2026-10-19.json":
+        payload = json.loads(value)
+        schedules = payload.get("schedules", [])
+        if not schedules or any(
+            not r.get("source", "").startswith("https://www.mom.gov.sg/")
+            or not r.get("verified_on")
+            or not r.get("valid_until")
+            or not r.get("points")
+            for r in schedules
+        ):
+            issues.append("official policy snapshot lacks MOM source/date/wage provenance")
     if path == "data/reference/role_titles.json":
         payload = json.loads(value)
         if (

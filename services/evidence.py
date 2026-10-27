@@ -9,6 +9,7 @@ from pydantic import Field
 from services.models import StrictModel
 
 LABEL = "SYNTHETIC DATA — demonstration only; not real tenders or market evidence"
+PRIVATE_PROPOSAL_QUOTES_VERSION = 1
 ROLES = [
     "Facilities Manager",
     "Assistant Facilities Manager",
@@ -255,6 +256,22 @@ def escalation_benchmark(rows, role, status="awarded", scope=None):
 def quoted_schedule(rows, schedule_id, role, calendar_years):
     cohort = comparable(rows, role, "both")
     cohort = [r for r in cohort if r["schedule_id"] == schedule_id]
+    # A private, officer-confirmed proposal quote may price its own review only.
+    # Its status deliberately excludes it from historical comparability/statistics.
+    private = [
+        r
+        for r in rows
+        if r.get("schedule_id") == schedule_id
+        and r.get("standard_role") == role
+        and r.get("data_origin") == "private officer proposal"
+        and r.get("validation_status") == "proposal quotation"
+        and r.get("currency") == "SGD"
+        and r.get("rate_basis") == "inclusive monthly per head"
+    ]
+    if private:
+        if cohort:
+            raise ValueError("Private quote identifiers must not collide with historical references")
+        cohort = private
     if len({r["scope"] for r in cohort}) != 1:
         raise ValueError("Quoted schedule must have a consistent scope")
     result = []

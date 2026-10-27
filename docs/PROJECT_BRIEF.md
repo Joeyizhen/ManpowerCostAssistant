@@ -4,15 +4,19 @@ AI-Powered FM Manpower Cost Assistant is a university capstone app, with Track 1
 
 ## Product scope and ownership
 
-Agent 1 (project owner) covers Track 1 Build New Plan and Track 2 Review Proposed Plan. Agent 2 (teammate) covers Track 3 Compare Against Approved Budget, Track 4 Review and Compare Tenderer Proposals, and Track 5 Maintain Historical Manpower Database. Only Track 1 is implemented; Track 2 is labelled planned and Tracks 3–5 remain future work.
+Agent 1 (project owner) covers Track 1 Build New Plan and Track 2 Review Proposed Plan. Agent 2 (teammate) covers Track 3 Compare Against Approved Budget, Track 4 Review and Compare Tenderer Proposals, and Track 5 Maintain Historical Manpower Database. Tracks 1 and 2 now have independent local review journeys. Integration with the teammate's Tracks 3/4 is deferred; their implementation and existing contracts are preserved. No cross-track transfer workflow or reference import is introduced.
 
 The existing Python/Streamlit app combines structured officer inputs, a real OpenAI tool-calling integration and deterministic Python services. The officer supplies a brief/period and current/proposed manpower, requests targeted assistant review, confirms manpower, chooses monthly inclusive rates and future-price assumptions, reviews findings/full-contract costs and confirms/export results. The model never approves a budget or updates historical evidence. Keys stay in private environment/hosting secrets.
 
-## Checkpoint rather than finished redesign
+## Current Track 1 refinement
 
 Current/proposed tables offer eight common optional roles, zero exclusions, fractional FTE, inventory/custom titles, optional existing deployment and explicit copy/mark-zero actions. Existing saved projects remain supported. Shared calculations, evidence retrieval, charts, confirmation invalidation and nine-section Excel export remain.
 
-The requested six-screen flow and compact pricing/future-change redesign are unfinished; [HANDOVER.md](HANDOVER.md) lists limitations. The model's newly extended comparison/zero behaviour has not been re-evaluated live. Automated calculation checks are not evidence of conversational reliability or real-world market validity.
+The six-screen flow, saved Back/Continue/progress, monthly role costs, observed synthetic band, compact future-change controls and combined findings/budget/export screen are implemented; [HANDOVER.md](HANDOVER.md) lists limitations. The model's newly extended comparison/zero behaviour has not been re-evaluated live. Automated calculation checks are not evidence of conversational reliability or real-world market validity.
+
+## Current Track 2 review
+
+Track 2 accepts an existing proposal, checks its figures and assumptions, and shows its reviewed budget in three screens. It preserves an immutable original and exact source files separately from revisions, with its own owned revision store. The shared calculator, reference filters, PWM rules and explicit final approval remain authoritative. See [Track 2 implementation](TRACK2_IMPLEMENTATION.md) and [current validation](VALIDATION.md) for readiness and extraction limitations.
 
 ## Evidence and calculation boundaries
 
@@ -26,3 +30,7 @@ The requested six-screen flow and compact pricing/future-change redesign are unf
 No trade-cost estimation, cost-per-GFA prediction, winning-tenderer recommendation, autonomous historical import or model retraining is introduced. Preserve the previous prototype and unrelated projects. Publication, collaborator invitation and hosting remain separate actions; this preparation is local only.
 
 See [COLLABORATION.md](COLLABORATION.md) for ownership/branches and [INTERFACES.md](INTERFACES.md) for the versioned budget/tender contracts.
+
+Latest officer-experience refinement preserves the six steps while simplifying inputs, decisions, pricing context and saved-draft protection. See [OFFICER_EXPERIENCE.md](OFFICER_EXPERIENCE.md) for current scope and the additive anticipated-month field; real integration must explicitly handle its precision.
+
+Pending owner inputs are recorded in [PENDING_DECISIONS.md](PENDING_DECISIONS.md), including PWM/year-on-year computation and replacement role lists. The 19 October review removes routine per-role acknowledgements and focuses on explicit discrepancies; historical notes above are superseded where inconsistent.

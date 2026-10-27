@@ -7,6 +7,8 @@ from services.models import Coverage, Plan, Profile, Responsibility, Role
 
 def demo_plan():
     plan = Plan(
+        contract_kind="new site / service",
+        current_deployment_status="no existing deployment",
         profile=Profile(
             name="Synthetic civic venue",
             description="Invented public venue with two buildings, events and tenant enquiries.",
@@ -20,7 +22,7 @@ def demo_plan():
             response_requirements="Officer assumption: technical on-site coverage at one simultaneous post",
             assets="Officer assumption: BMS present, chiller absent; other asset details unknown",
             exclusions="GST, specialist maintenance, security contract, cleaning, supplies and event delivery staff",
-        )
+        ),
     )
     plan.responsibilities = [
         Responsibility(
@@ -49,6 +51,7 @@ def demo_plan():
             experience="Officer requirement: 5 years relevant experience",
             qualifications="Officer requirement: FM qualification",
             quantity=1,
+            quantity_unit="headcount",
             quantity_reason="Officer-selected one-person scenario for oversight; workload rule unavailable",
             rate=8000,
             rate_reason="Synthetic comparable quote selection, inclusive manpower only",
@@ -66,6 +69,7 @@ def demo_plan():
             experience="Officer requirement: 3 years technical response",
             qualifications="Officer requirement: relevant technical qualification",
             quantity=5,
+            quantity_unit="headcount",
             quantity_basis="coverage",
             coverage=Coverage(
                 hours_per_day=24,
@@ -92,6 +96,7 @@ def demo_plan():
             experience="Officer requirement: event coordination experience",
             qualifications="Officer requirement: relevant coordination experience",
             quantity=1,
+            quantity_unit="headcount",
             quantity_reason="Officer-selected scenario; no validated event workload rule",
             rate=5000,
             rate_reason="Invented officer rate assumption; no internal match or external research",

@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from services.calculations import budget, coverage_quantity
 from services.evidence import ROLES, load_records, position, rate_benchmark
+from services.manpower_checks import quantity_discrepancy, shared_basis_mismatches
 from services.models import GATES, Finding, Plan, Profile, Responsibility, Role, now
 
 
@@ -79,6 +80,13 @@ def apply_change(plan: Plan, kind: str, payload: dict, reason: str, officer: str
                 gate = "rates" if any(getattr(old, k) != getattr(item, k) for k in pricing) else "escalation"
     else:
         raise ValueError("Unknown change type")
+    if kind == "role" and gate == "escalation":
+        candidate.basis_drafts.pop("future_mode_" + item.id, None)
+        values = candidate.basis_drafts.get("_ui_controls", {}).get("values", {})
+        prefix = f"esc_{plan.id}_{item.id}_"
+        for key in list(values):
+            if key.startswith(prefix):
+                values.pop(key)
     invalidate(candidate, gate, reason, officer)
     if candidate.working_notes.get("base_version") == plan.version:
         notes = candidate.working_notes
@@ -95,6 +103,11 @@ def apply_change(plan: Plan, kind: str, payload: dict, reason: str, officer: str
             "officer": officer,
             "action": "Revision details",
             "kind": kind,
+            "before": next((r.model_dump(mode="json") for r in plan.roles if r.id == payload.get("id")), None)
+            if kind == "role"
+            else plan.profile.model_dump(mode="json")
+            if kind == "profile"
+            else None,
             "after": payload,
             "previous_findings": previous_findings,
         }
@@ -120,29 +133,24 @@ def missing_for_gate(plan: Plan, gate: str, records=None):
             errors.append("Contract start year is missing (an exact date is optional)")
         if p.start and p.start_year is not None and p.start.year != p.start_year:
             errors.append("Contract start date and year disagree; correct one of them")
+        if p.start and p.start_month is not None and p.start.month != p.start_month:
+            errors.append("Exact contract start date and anticipated month disagree; correct one of them")
         if p.years > 20:
             errors.append("Contract base plus option years cannot exceed 20")
     elif gate == "responsibilities":
-        if not plan.responsibilities:
-            errors.append("Record operational responsibilities, external coverage or unknown scope")
-        for r in plan.responsibilities:
-            if r.coverage == "external" and not r.provider.strip():
-                errors.append(f"{r.id}: identify the external provider")
+        pass  # Scope review is advisory; missing duties do not prevent valid costing.
     elif gate in ("quantities", "plan"):
         if not any(r.included for r in plan.roles):
             errors.append("Include at least one role")
-        known = {r.id for r in plan.responsibilities}
         for r in plan.roles:
             if not r.included:
                 if not r.exclusion_reason.strip():
                     errors.append(f"{r.label}: record why the role was excluded")
                 continue
-            if r.quantity is None or r.quantity <= 0 or not r.quantity_reason.strip():
-                errors.append(f"{r.label}: set quantity and deployment rationale")
+            if r.quantity is None or r.quantity <= 0:
+                errors.append(f"{r.label}: enter a positive proposed quantity, or 0 to exclude the role")
             if r.quantity_unit == "posts":
                 errors.append(f"{r.label}: convert posts to explicit headcount or FTE before confirmation")
-            if not r.responsibility_ids or not set(r.responsibility_ids) <= known:
-                errors.append(f"{r.label}: assign valid responsibilities")
             if r.quantity_basis == "coverage":
                 try:
                     if r.coverage is None:
@@ -172,7 +180,42 @@ def missing_for_gate(plan: Plan, gate: str, records=None):
         for r in plan.roles:
             if r.included and (len(r.escalation) != p.years or not r.escalation_reason.strip()):
                 errors.append(f"{r.label}: select and justify every contract year's escalation")
+    from services.decision_basis import basis_errors
+
+    if gate in ("quantities", "plan"):
+        errors += basis_errors(plan, "quantity", records or [])
+    elif gate == "rates":
+        errors += basis_errors(plan, "rate", records or [])
+    elif gate == "escalation":
+        errors += basis_errors(plan, "escalation", records or []) + basis_errors(
+            plan, "policy", records or []
+        )
     return errors
+
+
+def requires_decision(finding):
+    """Routine qualifications remain disclosed, without role-by-role acknowledgements."""
+    routine = {
+        "synthetic",
+        "scenario",
+        "unmatched",
+        "thin_evidence",
+        "requirements",
+        "role_scope",
+        "change_reason",
+        "quantity_reason",
+        "exclusions",
+        "mapping",
+        "roster",
+        "relief",
+        "pwm_budget_method",
+        "pwm_unpublished_assumption",
+    }
+    return (
+        not finding.blocking
+        and finding.code not in routine
+        and not finding.code.startswith(("unknown_", "coverage_", "provider_", "basis_missing_"))
+    )
 
 
 def confirm(plan: Plan, gate: str, officer: str, records=None):
@@ -194,11 +237,22 @@ def confirm(plan: Plan, gate: str, officer: str, records=None):
         current = findings(plan, records or [])
         errors += [f.message for f in current if f.blocking]
         if gate == "final":
+            from services.decision_basis import basis_errors
+
+            errors += [
+                e
+                for kind in ("quantity", "rate", "escalation", "policy")
+                for e in basis_errors(plan, kind, records or [])
+            ]
             errors += [
                 f"Decision/justification required: {f.message}"
                 for f in current
-                if f.status == "unresolved risk"
-                or f.justification == "Officer justification was not provided."
+                if requires_decision(f)
+                and (
+                    not f.officer.strip()
+                    or not f.justification.strip()
+                    or f.justification == "Officer justification was not provided."
+                )
             ]
     if errors:
         raise ValueError("\n".join(dict.fromkeys(errors)))
@@ -217,19 +271,77 @@ def unlocked_stage(plan):
     return 9
 
 
+def finding_context(plan, code, role, message):
+    """Keep judgements when unrelated prices/roles change; reopen their actual inputs."""
+    profile = plan.profile.model_dump(mode="json")
+    data = role.model_dump(mode="json") if role else {}
+    if code in {"rate_range", "unmatched", "thin_evidence", "mapping"}:
+        fields = (
+            "label",
+            "mapped_role",
+            "mapping_reason",
+            "rate",
+            "benchmark_year",
+            "benchmark_scope",
+            "benchmark_status",
+        )
+        scope = {k: profile[k] for k in ("start", "start_year", "start_month")}
+    elif code == "quantity_contradiction":
+        fields = ("quantity", "current_quantity", "quantity_unit", "duties_notes")
+        scope = {"contract_kind": plan.contract_kind}
+    elif code in {
+        "scenario",
+        "quantity_reason",
+        "role_scope",
+        "change_reason",
+        "undercoverage",
+        "undercoverage_year",
+        "relief",
+        "roster",
+        "coverage_math",
+    }:
+        fields = (
+            "included",
+            "quantity",
+            "current_quantity",
+            "quantity_unit",
+            "quantity_basis",
+            "quantity_reason",
+            "yearly_quantities",
+            "coverage",
+            "responsibility_ids",
+            "duties_notes",
+        )
+        scope = {
+            k: profile[k] for k in ("description", "operating_hours", "locations", "response_requirements")
+        }
+    elif code.startswith("policy_") or code == "unusual_escalation":
+        fields = ("policies", "pwm", "escalation", "escalation_mode", "schedule_id", "escalation_reason")
+        scope = {k: profile[k] for k in ("start", "start_year", "start_month", "base_years", "option_years")}
+    elif code.startswith("unknown_"):
+        key = code.removeprefix("unknown_")
+        fields, scope = (), {key: profile.get(key)}
+    elif code.startswith(("coverage_", "duplicate_", "provider_")) or code == "requirements":
+        return {
+            "message": message,
+            "duties": [d.model_dump(mode="json") for d in plan.responsibilities],
+            "assignments": [
+                {"id": r.id, "label": r.label, "included": r.included, "duties": r.responsibility_ids}
+                for r in plan.roles
+            ],
+        }
+    else:
+        return {"message": message, "profile": profile, "role": data}
+    return {"message": message, "scope": scope, "role": {key: data.get(key) for key in fields}}
+
+
 def findings(plan: Plan, records):
     result = []
 
     def add(code, message, impact, role=None, blocking=False, evidence="", year=None):
         rid = role.id if role else ""
         fid = f"{code}:{rid}:{year or ''}"
-        context = {
-            "profile": plan.profile.model_dump(mode="json"),
-            "role": role.model_dump(mode="json")
-            if role
-            else [r.model_dump(mode="json") for r in plan.responsibilities],
-            "message": message,
-        }
+        context = finding_context(plan, code, role, message)
         fp = hashlib.sha256(json.dumps(context, sort_keys=True).encode()).hexdigest()
         item = Finding(
             id=fid,
@@ -263,10 +375,79 @@ def findings(plan: Plan, records):
                 f"Project {key.replace('_', ' ')} contains an unknown requirement.",
                 "Operational scope may be incomplete; retain this qualification until clarified.",
             )
+    from services.decision_basis import basis_errors
+
+    rationale_errors = {
+        e for kind in ("quantity", "rate", "escalation", "policy") for e in basis_errors(plan, kind, records)
+    }
     for i, gate in enumerate(GATES[:5]):
         for error in missing_for_gate(plan, gate, records):
-            add(f"missing_{i}_{len(result)}", error, "Cannot confirm required inputs.", blocking=True)
+            rationale = error in rationale_errors
+            add(
+                f"basis_missing_{i}_{len(result)}" if rationale else f"missing_{i}_{len(result)}",
+                error,
+                "Record the basis beside the decision before confirmation; valid figures may be retained."
+                if rationale
+                else "Cannot confirm required calculation inputs.",
+                blocking=not rationale,
+            )
+    for mismatch in shared_basis_mismatches(plan):
+        add(
+            mismatch["id"],
+            mismatch["Check"],
+            "The recorded operational explanation and selected quantities differ. Correct or retain the choice with an explicit qualification.",
+            evidence=mismatch["Remarks"],
+        )
     active = [r for r in plan.roles if r.included]
+    if not plan.responsibilities:
+        add(
+            "requirements",
+            "Operational duties have not been recorded separately.",
+            "Staffing can be costed, but duty coverage has not been assessed.",
+        )
+    known = {d.id for d in plan.responsibilities}
+    for role in active:
+        mismatch = quantity_discrepancy(role, plan.contract_kind == "existing contract")
+        if mismatch:
+            add(
+                "quantity_contradiction",
+                f"{role.label}: {mismatch}",
+                "The remarks and numerical inputs disagree; correct or retain them with an explicit qualification.",
+                role,
+                evidence=role.duties_notes,
+            )
+        if (
+            role.current_quantity is not None
+            and role.quantity != role.current_quantity
+            and not role.duties_notes.strip()
+        ):
+            add(
+                "change_reason",
+                f"{role.label}: current and proposed figures differ without remarks.",
+                "Record the reason or acknowledge that the change still needs explanation.",
+                role,
+            )
+        if not role.quantity_reason.strip():
+            add(
+                "quantity_reason",
+                f"{role.label}: staffing rationale has not been recorded.",
+                "The quantity can be costed; its operational basis remains unverified.",
+                role,
+            )
+        if not role.responsibility_ids or not set(role.responsibility_ids) <= known:
+            add(
+                "role_scope",
+                f"{role.label}: duty coverage has not been linked or confirmed.",
+                "Review the intended duties or retain the quantity with this scope uncertainty.",
+                role,
+            )
+    for responsibility in plan.responsibilities:
+        if responsibility.coverage == "external" and not responsibility.provider.strip():
+            add(
+                f"provider_{responsibility.id}",
+                f"External provider not identified: {responsibility.description}",
+                "Coverage is officer-reported and needs verification.",
+            )
     for responsibility in plan.responsibilities:
         assigned = [r.label for r in active if responsibility.id in r.responsibility_ids]
         if responsibility.coverage == "unknown" or (responsibility.coverage == "plan" and not assigned):
@@ -282,6 +463,27 @@ def findings(plan: Plan, records):
                 "Deployment may duplicate another role or external provider.",
             )
     for r in active:
+        if r.pwm:
+            from services.pwm import get_schedule, wage_at
+
+            policy_source = get_schedule(r.pwm.schedule_id)
+            add(
+                "pwm_budget_method",
+                f"{r.label}: official wage ratios applied to an officer-supplied salary component.",
+                "Eligibility and salary decomposition require officer confirmation. This budgeting method is not a comprehensive payroll/legal compliance calculation.",
+                r,
+                evidence=policy_source["source"] + "; checked " + policy_source["verified_on"],
+            )
+            if plan.profile.costing_start:
+                reference = float(wage_at(policy_source, plan.profile.costing_start))
+                if r.pwm.starting_salary < reference:
+                    add(
+                        "pwm_salary_reference",
+                        f"{r.label}: supplied salary component {r.pwm.starting_salary:,.2f} is below the selected published wage reference {reference:,.2f}.",
+                        "Check the component definition and wage basis against the applicable official requirements; the ratio method does not establish compliance.",
+                        r,
+                        evidence=policy_source["source"],
+                    )
         if not r.mapped_role:
             add(
                 "unmatched",
@@ -416,13 +618,23 @@ def record_decision(plan, finding, status, justification, officer, inclusion="",
         raise ValueError("Revise blocking inputs; exceptions cannot bypass invalid arithmetic")
     if status not in ("accepted exception", "unresolved risk", "data limitation"):
         raise ValueError("Resolved findings must be resolved by changing the underlying inputs")
-    if not justification.strip():
-        raise ValueError("Record an officer justification")
+    from services.decision_basis import meaningful
+
+    if not meaningful(justification):
+        raise ValueError(
+            "Explain why the valid value is retained or how the uncertainty is being treated; a generic acknowledgement is insufficient"
+        )
+    if not officer.strip():
+        raise ValueError("Officer name is required")
     invalidate(plan, "validation", f"Finding decision: {finding.id}", officer)
     item = finding.model_copy(deep=True)
     item.status, item.justification, item.officer, item.timestamp = status, justification, officer, now()
     item.inclusion, item.further_approval = inclusion, further_approval
     plan.decisions[item.id] = item
+    values = plan.basis_drafts.get("_ui_controls", {}).get("values", {})
+    for key in list(values):
+        if key.startswith(f"finding_{plan.id}_{finding.id}_"):
+            values.pop(key)
     plan.history.append(
         {"time": now(), "version": plan.version, "action": "Finding decision", **item.model_dump()}
     )
@@ -441,6 +653,10 @@ def finding_history(plan, current):
 def budget_status(plan, records):
     current = findings(plan, records)
     if "final" in plan.confirmations:
+        from services.decision_basis import basis_errors
+
+        if any(basis_errors(plan, kind, records) for kind in ("quantity", "rate", "escalation", "policy")):
+            return "Previously confirmed; decision-basis review needed"
         return "Confirmed qualified budget" if current else "Confirmed budget"
     if any(f.blocking for f in current):
         return "Incomplete draft"
