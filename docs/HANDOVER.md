@@ -1,3 +1,15 @@
+# 27 October 2026 — Sprint 2 local integration milestone
+
+Agent 1 was checkpointed on feature/agent1 at `ec759de` after 256 tests and an explicit-file privacy audit. The separate `integration/sprint2` branch incorporates Agent 2 source `a7923f3`. Main and both remote developer branches remain unchanged. See [the integration report](SPRINT2_INTEGRATION.md).
+
+The combined application offers Manpower budgeting and Tender evaluation, each with two task choices. Navigation preserves separate in-session models and unfinished value inputs. Existing budgeting save/discard/confirmation safeguards remain. Track 4's historical-comparison scope is explicit; Track 5 is only marked Planned. Ordinary calculations and navigation make no automatic paid model call. No live budget transfer, v2 reference activation, push or deployment is included.
+
+Verification: Agent 1 checkpoint 256 passed in 248.42 seconds; focused composition 75 passed in 160.67 seconds; full combined regression **295 passed in 297.81 seconds**. Final draft-restoration/checkbox/proposal/yearly/PWM follow-up **35 passed in 53.94 seconds**. The follow-up repeats affected coverage after the last navigation reset change; it is not 35 additional unique tests. Lint passes. Browser verification opened both activities and all four task entries at 985-pixel width, then recovered an unfinished budget after visiting both tender workflows. The main app is refreshed in place to retain its session; final index and preservation audits accompany this milestone.
+
+The real saved project remains at revision 14/version 54 with no approval change. Active reference hashes are unchanged. Agent 1 calculators/models/storage/contracts are unchanged from its checkpoint, and Agent 2 calculation services remain byte-identical to its source commit. Known transfer, unit, reference-governance and original-versus-revised discrepancy issues are carried forward explicitly. Historical entries below retain earlier context; their blanket integration deferral is superseded only for this authorised navigation milestone.
+
+---
+
 # 27 October 2026 — independent Tracks 1 and 2 completed locally
 
 The earlier pause was resumed. Track 1's **Your manpower budget** page now has four clear tabs, short direct actions, reused rationales, annual/component comparisons and separate draft export/final confirmation. Track 2 is independently implemented as **Add proposed budget → check figures and assumptions → view reviewed budget**, preserving immutable original evidence separately from accepted revisions. See [Track 1 results](STEP6_RESULTS_PAGE.md) and [Track 2 implementation and limitations](TRACK2_IMPLEMENTATION.md).
@@ -129,6 +141,12 @@ The checkpoint passed **94 automated checks** before collaboration preparation. 
 - [INTERFACES.md](INTERFACES.md), `services/integration_contracts.py` and `contracts/` define version 1.0 budget/tender transfer documents, without implementing the remaining tracks.
 - `data/sample/integration/approved_budget.synthetic.json` is an invented, explicitly synthetic approved-budget development example, not a real approval or saved officer plan.
 - `scripts/audit_shareable.py` audits the indexed file set, exclusions, credential/private-path patterns and fixture provenance without echoing secret values. `.gitignore` also excludes private original notes, raw documents/records and runtime artifacts. Original setup/protocol files were backed up in ignored local storage before sanitisation.
+
+## Agent 2 Track 3 continuation — 18 October 2026
+
+Track 3 is now implemented as a development prototype in `agent2_views.py` and `services/agent2/track3.py`, with focused regression tests. It supports approved-budget confirmation, multiple tenderers, verified editable schedules, role matching, deterministic comparisons/findings/questions, officer review fields, save/resume and traceable Excel export. Upload validation blocks missing values/years, duplicate role-year rows, incompatible quantity units, unsupported currencies and non-monthly pricing. Excel parsing combines recognised schedule worksheets and retains filename, sheet and row references.
+
+This does not establish production readiness. Approval authenticity, subtotal/declared-total reconciliation, richer base/option analysis, accepted-exception history, reviewer timestamps, access control and PDF/Word extraction remain open work. Track 4 now has a synthetic-data historical-comparison prototype; Track 5 database administration, validation, versioning and access controls are not implemented.
 
 ## Known incomplete work and failures
 

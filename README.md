@@ -1,6 +1,6 @@
 # AI-Powered FM Manpower Cost Assistant
 
-Local collaboration baseline for a two-agent/five-track capstone app. Track 1 provides a six-screen new-plan journey. Track 2 independently reviews an existing proposal in three screens. Both reuse deterministic manpower calculations, labelled reference evidence and explicit officer decisions. Tracks 3/4 integration is deferred; no teammate merge, transfer workflow, shared deployment or historical import is included.
+Local Sprint 2 application with two activities: manpower budgeting and tender evaluation. Tracks 1/2 retain their current workflows; Tracks 3/4 run independently with labelled sample references. Direct budget transfer, shared-reference activation and Track 5 maintenance remain unavailable. The integration branch is a local demonstration milestone, not a production release.
 
 | Owner | Agent | Tracks |
 |---|---|---|
@@ -25,6 +25,12 @@ Edit `.env` privately to set `OPENAI_API_KEY` and `OPENAI_MODEL` if live guidanc
 
 Live guidance uses the Responses API with validated tools, finite limits and no automatic retries. The preview process needs outbound provider connectivity; a sandbox-restricted launch may serve the page but block guidance. Failed turns remain available for explicit retry. Shared hosting requires server-side OIDC login, PostgreSQL and an explicit allowlist; see [DEPLOYMENT.md](DEPLOYMENT.md). Do not expose local review mode publicly. No deployment is performed here.
 
+## Sprint 2 navigation
+
+Start with **Manpower budgeting** or **Tender evaluation**, then choose one of the two tasks. Back returns to that activity's options; Change activity returns to the landing page. Recorded models and unfinished value inputs remain separate for each workflow in the current session. Save/download still provides persistence beyond the session, and existing project-switch protections remain.
+
+Tender evaluation runs independently from live budgeting projects. Track 4 currently compares proposals against synthetic historical references; dedicated cross-tenderer comparison is incomplete. Historical management is marked Planned. Ordinary comparison makes no model call; optional AI explanation requires a separate explicit action. See [the integration report](docs/SPRINT2_INTEGRATION.md) for source commits, checks and carried limitations.
+
 ## Current Track 1 behaviour
 
 Enter a proposed tender title, operating-conditions description, anticipated start as MMM YYYY, and base/option terms in years (0 for no option). Month-only starts retain an unknown exact day; the first day is a disclosed illustrative costing boundary. Indicate existing contract or new site/service. The manpower screen presents eight common optional roles and lets you add inventory/custom titles. Proposed quantity 0 excludes a role; an unanswered field is not converted to 0. Fractional staffing uses FTE; posts need a confirmed staffing conversion. Current contract deployment is optional context. Copy-current and mark-unused-zero are explicit actions. Supporting documents and duty/contractor notes are optional. The pasted-list UI has been removed.
@@ -40,6 +46,12 @@ Add proposed budget → check figures and assumptions → view the reviewed budg
 The review reuses Track 1 calculations, eligible rate/annual-increase references, coverage checks and relevant PWM safeguards. Only material discrepancies require a recorded response; capability gaps remain qualifications rather than a routine questionnaire. Previewing a rate, applying changes, saving, confirming reviewed inputs and approving the final budget are separate actions. The four-tab results page compares original and reviewed EPV and provides a management report and evidence workbook. See [Track 2 implementation and limits](docs/TRACK2_IMPLEMENTATION.md).
 
 Document extraction is conservative and requires officer checking. Scanned PDFs need manual transcription; no OCR or universal layout interpretation is claimed. Private quoted prices are proposal evidence, never new benchmark records. Live assistant review is optional and has not been evaluated with paid calls in this refinement. The v2 reference workbook remains inactive.
+
+## Current Track 3 behaviour
+
+Track 3 creates a tender-review project, confirms the approved-budget reference and revision, verifies multiple tenderer schedules, reviews role matches, compares full-contract and role-level costs, records officer comments/statuses, exports a traceable workbook and saves/resumes project JSON. Comparability checks block missing years, duplicate role-year rows and incompatible headcount/FTE units. Uploads must establish monthly SGD pricing; unsupported currencies and annual/daily/hourly frequencies are rejected rather than silently converted. Excel uploads inspect every worksheet containing a recognised role column and retain filename, worksheet and row provenance.
+
+This is decision support only. Below-budget submissions produce clarification prompts rather than automatic savings or rejection conclusions, and the application does not select a tenderer. Track 3 remains a prototype: it does not authenticate signed approvals, convert currencies or pricing frequencies, extract PDF/Word tables, or establish production access controls.
 
 ## Synthetic evidence and handoff
 

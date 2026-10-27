@@ -355,6 +355,7 @@ def test_track2_offline_capture_check_results_confirm_and_resume(monkeypatch, tm
     monkeypatch.setenv("OPENAI_MODEL", "")
     at = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=50).run()
     original_track1 = at.session_state["plan"].model_dump_json()
+    at.button(key="activity_budgeting").click().run()
     at.button(key="choose_track_2").click().run()
     assert not at.exception
     p = sample()

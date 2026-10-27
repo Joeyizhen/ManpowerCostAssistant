@@ -4,6 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from activity_nav import retained_key
 from services.calculations import D, budget, cents
 from services.evidence import rate_benchmark
 
@@ -232,7 +233,7 @@ def annual_review(plan, result):
         "Budget view",
         ["Annual totals", "Cost components"],
         horizontal=True,
-        key=f"final_budget_view_{plan.id}",
+        key=retained_key(f"final_budget_view_{plan.id}"),
         label_visibility="collapsed",
     )
     if view == "Annual totals":
@@ -489,7 +490,7 @@ def finding_control(plan, finding, officer, sync_controls):
     choice = st.radio(
         "How would you like to resolve this?",
         ["Keep my figures", "Correct the interpretation", "Revise figures"],
-        key=prefix + "_choice",
+        key=retained_key(prefix + "_choice"),
         horizontal=True,
         on_change=remember_review_choice,
         args=(prefix,),
@@ -503,16 +504,20 @@ def finding_control(plan, finding, officer, sync_controls):
             "Your relevant earlier explanation is reused below. Edit it only if the concern needs a different response."
         )
     justification = st.text_area(
-        "Reason for retaining figures or correcting the interpretation", value=reason, key=prefix + "_reason"
+        "Reason for retaining figures or correcting the interpretation",
+        value=reason,
+        key=retained_key(prefix + "_reason"),
     )
     with st.expander("Cost treatment or further approval, if relevant"):
         inclusion = st.text_input(
             "Cost inclusion / exclusion / impact treatment",
             value=finding.inclusion,
-            key=prefix + "_inclusion",
+            key=retained_key(prefix + "_inclusion"),
         )
         further = st.text_input(
-            "Further approval required (if any)", value=finding.further_approval, key=prefix + "_further"
+            "Further approval required (if any)",
+            value=finding.further_approval,
+            key=retained_key(prefix + "_further"),
         )
     if st.button("Record decision", key=prefix + "_record"):
         try:

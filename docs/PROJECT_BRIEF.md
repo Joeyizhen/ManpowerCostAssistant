@@ -4,7 +4,7 @@ AI-Powered FM Manpower Cost Assistant is a university capstone app, with Track 1
 
 ## Product scope and ownership
 
-Agent 1 (project owner) covers Track 1 Build New Plan and Track 2 Review Proposed Plan. Agent 2 (teammate) covers Track 3 Compare Against Approved Budget, Track 4 Review and Compare Tenderer Proposals, and Track 5 Maintain Historical Manpower Database. Tracks 1 and 2 now have independent local review journeys. Integration with the teammate's Tracks 3/4 is deferred; their implementation and existing contracts are preserved. No cross-track transfer workflow or reference import is introduced.
+Agent 1 (project owner) covers Track 1 Build New Plan and Track 2 Review Proposed Plan. Agent 2 (teammate) covers Tracks 3–5. The Sprint 2 integration branch makes Tracks 1–4 accessible through two activities. Track 4 currently benchmarks proposals against historical references; dedicated cross-tenderer comparison and Track 5 maintenance remain incomplete. No live budget transfer or v2 reference activation is included.
 
 The existing Python/Streamlit app combines structured officer inputs, a real OpenAI tool-calling integration and deterministic Python services. The officer supplies a brief/period and current/proposed manpower, requests targeted assistant review, confirms manpower, chooses monthly inclusive rates and future-price assumptions, reviews findings/full-contract costs and confirms/export results. The model never approves a budget or updates historical evidence. Keys stay in private environment/hosting secrets.
 
@@ -28,6 +28,10 @@ Track 2 accepts an existing proposal, checks its figures and assumptions, and sh
 - Full contract value is the sum of role/year costs, with base/options, annual chart, reconciled waterfall and disclosed sensitivity. Export evidence, assumptions, operational reasons, findings and status.
 
 No trade-cost estimation, cost-per-GFA prediction, winning-tenderer recommendation, autonomous historical import or model retraining is introduced. Preserve the previous prototype and unrelated projects. Publication, collaborator invitation and hosting remain separate actions; this preparation is local only.
+
+## Track 3 checkpoint
+
+Track 3 supports multiple verified tenderer schedules, reviewable role matching, contract/role variance findings, clarification questions, officer decisions, save/resume and traceable Excel export. Deterministic checks block missing contract years, duplicate role-year rows, incompatible headcount/FTE units, unsupported currencies and non-monthly rates. Relevant worksheets in an Excel workbook are combined with worksheet/row provenance; unrelated instruction sheets are ignored. Approval references are officer-confirmed metadata, not cryptographic proof or trusted-store authentication.
 
 See [COLLABORATION.md](COLLABORATION.md) for ownership/branches and [INTERFACES.md](INTERFACES.md) for the versioned budget/tender contracts.
 

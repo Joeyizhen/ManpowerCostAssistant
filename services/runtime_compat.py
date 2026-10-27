@@ -17,7 +17,7 @@ def recover_stale_imports(modules):
     old_helper = code is not None and code.co_argcount != 2
     future = modules.get("future_inputs")
     old_future = future is not None and (
-        not hasattr(future, "future_screen") or getattr(future, "GROUPED_UI_VERSION", None) != 11
+        not hasattr(future, "future_screen") or getattr(future, "GROUPED_UI_VERSION", None) != 12
     )
     review = modules.get("review_inputs")
     old_review = review is not None and getattr(review, "FINAL_REVIEW_UI_VERSION", None) != 14

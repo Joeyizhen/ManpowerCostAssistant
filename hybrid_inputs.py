@@ -4,6 +4,7 @@ import pandas as pd
 import streamlit as st
 
 import ui_drafts
+from activity_nav import retained_key
 from journey_inputs import (
     commit_rows,
     deployment_review_table,
@@ -234,7 +235,7 @@ def show_progress(plan):
             list(range(limit + 1)),
             index=plan.ui_step,
             format_func=lambda i: f"{i + 1}. {STEP_LABELS[i]}",
-            key=f"six_nav_{plan.id}_{plan.ui_step}_{limit}",
+            key=retained_key(f"six_nav_{plan.id}_{plan.ui_step}_{limit}"),
         )
         if selected != plan.ui_step:
             if ui_drafts.unsaved(plan, pending_control_errors(plan)):

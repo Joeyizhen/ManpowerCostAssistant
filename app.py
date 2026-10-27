@@ -9,9 +9,11 @@ from uuid import uuid4
 import streamlit as st
 
 import services.runtime_compat  # noqa: F401 -- recover stale development imports without losing sessions
+from activity_nav import retained_key
 
 importlib.reload(services.runtime_compat)
 import ui_drafts
+from activity_nav import render_navigation, show_activity_options
 from future_inputs import future_screen
 from hybrid_inputs import (
     confirmation_errors,
@@ -113,38 +115,25 @@ if "selected_track" not in st.session_state:
 if "review_open" not in st.session_state:
     st.session_state.review_open = False
 
-if st.session_state.selected_track is None:
-    st.caption("FM MANPOWER COST ASSISTANT · AGENT 1")
-    st.title("What would you like to do?")
-    st.write("Choose a starting point. We’ll work through it together, one step at a time.")
-    build, review = st.columns(2, gap="large")
-    with build:
-        with st.container(border=True):
-            st.caption("TRACK 1")
-            st.subheader("Build a new plan")
-            st.write("Describe your project. Establish the duties and people needed, then review the budget.")
-            if st.button("Build new plan", key="choose_track_1", type="primary", width="stretch"):
-                st.session_state.selected_track = 1
-                st.rerun()
-    with review:
-        with st.container(border=True):
-            st.caption("TRACK 2")
-            st.subheader("Review a proposed plan")
-            st.write(
-                "Add a proposed budget, check its figures and assumptions, then view the reviewed budget."
-            )
-            if st.button("Review proposed plan", key="choose_track_2", width="stretch"):
-                st.session_state.selected_track = 2
-                st.rerun()
-    st.caption(
-        "This review release uses labelled synthetic evidence. Your current draft is retained when switching tracks."
-    )
-    st.stop()
+show_activity_options()
+render_navigation(st.session_state.selected_track)
 
 if st.session_state.selected_track == 2:
     from proposal_inputs import render as render_proposal
 
     render_proposal(cfg, store, owner)
+    st.stop()
+
+if st.session_state.selected_track == 3:
+    from agent2_views import render_agent2_track3
+
+    render_agent2_track3()
+    st.stop()
+
+if st.session_state.selected_track == 4:
+    from agent2_track4_views import render_agent2_track4
+
+    render_agent2_track4(cfg)
     st.stop()
 
 records = load_records()
@@ -323,15 +312,11 @@ def request_guidance(message, current_stage, kind="message"):
 
 
 with st.sidebar:
-    st.caption("AGENT 1 · MANPOWER BUDGET PLANNING")
-    st.title("Build new plan")
-    st.caption("Track 1")
+    st.caption("MANPOWER BUDGETING")
+    st.title("Build a new budget")
     project_status = st.empty()
     if "project_notice" in st.session_state:
         st.success(st.session_state.pop("project_notice"))
-    if st.button("Change track", key="change_track", width="stretch"):
-        st.session_state.selected_track = None
-        st.rerun()
     if st.button("New blank project", width="stretch"):
         switch_project(Plan())
     if st.button("Load synthetic example", width="stretch"):
@@ -340,7 +325,10 @@ with st.sidebar:
     saved = store.list(owner)
     if saved:
         selected = st.selectbox(
-            "Saved projects", saved, format_func=lambda x: f"{x['name']} · saved revision {x['revision']}"
+            "Saved projects",
+            saved,
+            format_func=lambda x: f"{x['name']} · saved revision {x['revision']}",
+            key=retained_key("navigation_app_326"),
         )
         if st.button("Resume selected project", width="stretch"):
             loaded, revision = store.load(selected["id"], owner)
@@ -450,7 +438,6 @@ show_save_status()
 
 st.caption("AI-POWERED FM MANPOWER COST ASSISTANT")
 st.title("Build a new manpower plan")
-st.caption("TRACK 1 · BUILD NEW PLAN")
 project_name = working_draft(plan).profile.name
 if project_name != "Untitled project":
     st.caption(f"Project: {project_name}")
@@ -490,7 +477,7 @@ if stage == 4:
         "Reference pricing year",
         reference_years,
         index=reference_years.index(default_year),
-        key=f"rate_{plan.id}_common_year",
+        key=retained_key(f"rate_{plan.id}_common_year"),
     )
     st.caption(
         "All references below use this pricing year and SGD inclusive monthly charges per head. No automatic time-normalisation is applied."
@@ -624,7 +611,7 @@ with (
             retry_message = st.text_area(
                 "Message kept for retry",
                 value=failed["message"],
-                key=f"retry_text_{failed['id']}",
+                key=retained_key(f"retry_text_{failed['id']}"),
                 height=100,
             )
         else:

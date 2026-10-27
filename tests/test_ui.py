@@ -15,6 +15,7 @@ def blank(monkeypatch, tmp_path, live=False):
     monkeypatch.setenv("OPENAI_API_KEY", "test-not-a-credential" if live else "")
     monkeypatch.setenv("OPENAI_MODEL", "test-model" if live else "")
     at = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=40).run()
+    at.button(key="activity_budgeting").click().run()
     at.button(key="choose_track_1").click().run()
     assert not at.exception
     return at

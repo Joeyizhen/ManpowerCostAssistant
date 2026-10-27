@@ -4,6 +4,7 @@ import html
 
 import streamlit as st
 
+from activity_nav import retained_key
 from services.calculations import monthly_role_cost
 from services.decision_basis import meaningful, retained_basis
 from services.journey import accept_review, prepare_review
@@ -80,14 +81,14 @@ def shared_pricing_panel(plan, records, officer):
             list(labels),
             default=saved.get("roles", defaults),
             format_func=lambda rid: labels[rid],
-            key=prefix + "_roles",
+            key=retained_key(prefix + "_roles"),
             on_change=keep_shared_editor,
             args=(prefix,),
         )
         reason = st.text_area(
             "Shared pricing basis",
             value=saved.get("reason", ""),
-            key=prefix + "_reason",
+            key=retained_key(prefix + "_reason"),
             on_change=keep_shared_editor,
             args=(prefix,),
             placeholder="For example: supplier quotation Q1 covers the inclusive monthly allowances for these roles.",
@@ -95,7 +96,7 @@ def shared_pricing_panel(plan, records, officer):
         source = st.text_input(
             "Shared quotation / document (optional)",
             value=saved.get("source", ""),
-            key=prefix + "_source",
+            key=retained_key(prefix + "_source"),
             on_change=keep_shared_editor,
             args=(prefix,),
         )
@@ -170,7 +171,7 @@ def starting_prices(plan, records, officer, save, sync):
         controls = c.container()
         details = c.expander("Edit basis / custom rate")
         if bm["available"]:
-            custom = details.checkbox("Use another rate", value=outside, key=prefix + "_custom")
+            custom = details.checkbox("Use another rate", value=outside, key=retained_key(prefix + "_custom"))
             low, high = round(bm["minimum"], 2), round(bm["maximum"], 2)
             if not custom and (role.rate is None or not low <= role.rate <= high):
                 controls.caption(
@@ -190,7 +191,7 @@ def starting_prices(plan, records, officer, save, sync):
                     value=None,
                     step=0.01,
                     format="%.2f",
-                    key=slider_key,
+                    key=retained_key(slider_key),
                     on_change=rate_changed,
                     args=(role.id, "rate", slider_key, prefix + "_number"),
                     label_visibility="collapsed",
@@ -214,7 +215,7 @@ def starting_prices(plan, records, officer, save, sync):
             value=None,
             format="%.2f",
             step=0.01,
-            key=prefix + "_number",
+            key=retained_key(prefix + "_number"),
             label_visibility="collapsed",
             disabled=outside and not custom,
             on_change=rate_changed,
@@ -229,7 +230,7 @@ def starting_prices(plan, records, officer, save, sync):
         ):
             details.text_area(
                 "Pricing rationale — " + role.label,
-                key=prefix + "_rationale",
+                key=retained_key(prefix + "_rationale"),
                 height=68,
                 on_change=rate_changed,
                 args=(role.id, "rate_reason", prefix + "_rationale"),
@@ -239,7 +240,7 @@ def starting_prices(plan, records, officer, save, sync):
             details.text_input(
                 "Quotation / document (optional) — " + role.label,
                 value=source,
-                key=prefix + "_source",
+                key=retained_key(prefix + "_source"),
                 on_change=pricing_source_changed,
                 args=(role.id, prefix + "_source"),
             )
@@ -273,7 +274,7 @@ def starting_prices(plan, records, officer, save, sync):
             list(labels),
             default=saved.get("roles", [r.id for r in mismatch]),
             format_func=lambda rid: labels[rid],
-            key=prefix + "_roles",
+            key=retained_key(prefix + "_roles"),
             on_change=year_changed,
             args=(prefix,),
         )
@@ -282,7 +283,7 @@ def starting_prices(plan, records, officer, save, sync):
         st.text_area(
             "Reference-year treatment",
             value=saved.get("explanation", default),
-            key=prefix + "_text",
+            key=retained_key(prefix + "_text"),
             on_change=year_changed,
             args=(prefix,),
             placeholder="Explain whether the reference-year allowance is retained or how the selected rates account for the contract start.",

@@ -6,6 +6,7 @@ import json
 import pandas as pd
 import streamlit as st
 
+from activity_nav import retained_key
 from services.models import Coverage
 from services.proposals import (
     COLUMNS,
@@ -96,19 +97,31 @@ def pwm_draft(prefix, rid):
 
 def profile_editor(p, current, key):
     seed = p.drafts.get(key, current.model_dump(mode="json"))
-    name = st.text_input("Proposal / project title", value=seed.get("name", ""), key=key + "_name")
+    name = st.text_input(
+        "Proposal / project title", value=seed.get("name", ""), key=retained_key(key + "_name")
+    )
     brief = st.text_area(
         "What must this team support?",
         value=seed.get("description", ""),
-        key=key + "_brief",
+        key=retained_key(key + "_brief"),
         placeholder="Property, operating hours, critical functions and any existing specialist support. Unknown details can remain unknown.",
     )
     a, b, c = st.columns(3)
     year = a.number_input(
-        "Start year", value=seed.get("start_year"), min_value=1900, max_value=2200, step=1, key=key + "_year"
+        "Start year",
+        value=seed.get("start_year"),
+        min_value=1900,
+        max_value=2200,
+        step=1,
+        key=retained_key(key + "_year"),
     )
     base = b.number_input(
-        "Base years", value=seed.get("base_years"), min_value=1, max_value=20, step=1, key=key + "_base"
+        "Base years",
+        value=seed.get("base_years"),
+        min_value=1,
+        max_value=20,
+        step=1,
+        key=retained_key(key + "_base"),
     )
     option = c.number_input(
         "Option years (0 if none)",
@@ -116,18 +129,18 @@ def profile_editor(p, current, key):
         min_value=0,
         max_value=20,
         step=1,
-        key=key + "_option",
+        key=retained_key(key + "_option"),
     )
     with st.expander("Exact start date or exclusions, when relevant"):
         exact = st.text_input(
             "Exact contract start (YYYY-MM-DD, only if known)",
             value=seed.get("start") or "",
-            key=key + "_start",
+            key=retained_key(key + "_start"),
         )
         exclusions = st.text_area(
             "Excluded costs / separately procured support",
             value=seed.get("exclusions", ""),
-            key=key + "_exclusions",
+            key=retained_key(key + "_exclusions"),
         )
     values = {
         **current.model_dump(mode="json"),
@@ -189,7 +202,7 @@ def capture_page(p, save):
     text = st.text_area(
         "Paste a table or describe the proposal",
         value=p.input_text,
-        key="proposal_text_" + p.id,
+        key=retained_key("proposal_text_" + p.id),
         placeholder="Role,Quantity,Unit,Monthly rate,Annual increase (%)\nFacility Manager,1,headcount,8000,3",
     )
     p.input_text = text
@@ -248,16 +261,16 @@ def capture_page(p, save):
         "Supplied full-contract EPV, if stated (SGD)",
         value=p.claimed_total,
         min_value=0.0,
-        key="proposal_total_" + p.id,
+        key=retained_key("proposal_total_" + p.id),
     )
     p.claimed_total = total
     inclusive = st.checkbox(
         "The rate column represents inclusive monthly manpower charges per head/FTE, not salary alone",
-        key="proposal_basis_" + p.id,
+        key=retained_key("proposal_basis_" + p.id),
     )
     accurate = st.checkbox(
         "The interpreted table and project context accurately record my proposal; unknowns are left unanswered",
-        key="proposal_interpret_" + p.id,
+        key=retained_key("proposal_interpret_" + p.id),
     )
     if st.button(
         "Confirm captured proposal and continue",
@@ -320,19 +333,19 @@ def future_controls(p, records, officer):
         "Apply a shared increase to these roles",
         [r.id for r in roles if not r.pwm and r.escalation_mode != "quoted schedule"],
         format_func=lambda rid: role_label(p, rid),
-        key="proposal_shared_roles_" + p.id,
+        key=retained_key("proposal_shared_roles_" + p.id),
     )
     percent = st.number_input(
         "Shared annual increase (%)",
         value=None,
         min_value=-50.0,
         max_value=100.0,
-        key="proposal_shared_percent_" + p.id,
+        key=retained_key("proposal_shared_percent_" + p.id),
     )
-    note = st.text_input("Optional explanation / reference", key="proposal_shared_note_" + p.id)
+    note = st.text_input("Optional explanation / reference", key=retained_key("proposal_shared_note_" + p.id))
     use_reference = st.checkbox(
         "Use the supported database average for the selected roles",
-        key="proposal_use_ref_" + p.id,
+        key=retained_key("proposal_use_ref_" + p.id),
         disabled=not bm["available"],
     )
     st.caption(
@@ -355,7 +368,7 @@ def future_controls(p, records, officer):
         "Manpower row",
         [r.id for r in roles],
         format_func=lambda rid: role_label(p, rid),
-        key="proposal_future_row_" + p.id,
+        key=retained_key("proposal_future_row_" + p.id),
         index=None,
     )
     if rid:
@@ -364,7 +377,7 @@ def future_controls(p, records, officer):
             "Future price basis",
             ["Yearly officer assumptions", "Quoted calendar-year prices"],
             horizontal=True,
-            key="proposal_future_method_" + p.id + rid,
+            key=retained_key("proposal_future_method_" + p.id + rid),
         )
         rows = [
             {
@@ -393,7 +406,7 @@ def future_controls(p, records, officer):
         p.drafts["year_table_" + rid] = table.astype(object).where(pd.notna(table), None).to_dict("records")
         source = st.text_input(
             "Quoted-price source or optional yearly-assumption note",
-            key="proposal_yearly_source_" + p.id + rid,
+            key=retained_key("proposal_yearly_source_" + p.id + rid),
         )
         if st.button("Apply yearly prices", key="proposal_yearly_apply_" + p.id + rid):
             try:
@@ -419,7 +432,7 @@ def future_controls(p, records, officer):
             [r.id for r in relevant],
             format_func=lambda rid: role_label(p, rid),
             index=None,
-            key="proposal_pwm_" + p.id,
+            key=retained_key("proposal_pwm_" + p.id),
         )
         if pwm_id:
             before_version = p.plan.version
@@ -448,44 +461,56 @@ def operational_controls(p, officer):
         [r.id for r in p.plan.roles if r.included],
         format_func=lambda rid: role_label(p, rid),
         index=None,
-        key="proposal_coverage_role_" + p.id,
+        key=retained_key("proposal_coverage_role_" + p.id),
     )
     if not role_id:
         return
     role = next(r for r in p.plan.roles if r.id == role_id)
     a, b, c = st.columns(3)
     hours = a.number_input(
-        "Hours/day", value=None, min_value=0.1, max_value=24.0, key="t2_cov_hours_" + p.id + "_" + role_id
+        "Hours/day",
+        value=None,
+        min_value=0.1,
+        max_value=24.0,
+        key=retained_key("t2_cov_hours_" + p.id + "_" + role_id),
     )
     days = b.number_input(
-        "Days/week", value=None, min_value=1, max_value=7, key="t2_cov_days_" + p.id + "_" + role_id
+        "Days/week",
+        value=None,
+        min_value=1,
+        max_value=7,
+        key=retained_key("t2_cov_days_" + p.id + "_" + role_id),
     )
     posts = c.number_input(
         "Simultaneous positions",
         value=None,
         min_value=1,
         max_value=1000,
-        key="t2_cov_posts_" + p.id + "_" + role_id,
+        key=retained_key("t2_cov_posts_" + p.id + "_" + role_id),
     )
     capacity = st.number_input(
         "Productive/capacity hours per person per week",
         value=None,
         min_value=0.1,
         max_value=168.0,
-        key="t2_cov_capacity_" + p.id + "_" + role_id,
+        key=retained_key("t2_cov_capacity_" + p.id + "_" + role_id),
     )
     basis = st.radio(
-        "Capacity basis", ["gross", "net"], horizontal=True, key="t2_cov_basis_" + p.id + "_" + role_id
+        "Capacity basis",
+        ["gross", "net"],
+        horizontal=True,
+        key=retained_key("t2_cov_basis_" + p.id + "_" + role_id),
     )
     relief = st.number_input(
         "Relief factor (1 for net hours)",
         value=None,
         min_value=1.0,
         max_value=3.0,
-        key="t2_cov_relief_" + p.id + "_" + role_id,
+        key=retained_key("t2_cov_relief_" + p.id + "_" + role_id),
     )
     reason = st.text_input(
-        "Operational source / scope of this coverage requirement", key="t2_cov_reason_" + p.id + "_" + role_id
+        "Operational source / scope of this coverage requirement",
+        key=retained_key("t2_cov_reason_" + p.id + "_" + role_id),
     )
     if all(x is not None for x in (hours, days, posts, capacity, relief)):
         try:
@@ -566,7 +591,7 @@ def finding_controls(p, records, officer):
                     "Expert review / unresolved",
                 ],
                 horizontal=True,
-                key=f"proposal_decision_{p.id}_{f.id}_{f.fingerprint}",
+                key=retained_key(f"proposal_decision_{p.id}_{f.id}_{f.fingerprint}"),
             )
             if choice == "Revise inputs":
                 st.caption(
@@ -586,7 +611,7 @@ def finding_controls(p, records, officer):
             reason = st.text_area(
                 "Relevant explanation or correction",
                 value=prior,
-                key=f"proposal_reason_{p.id}_{f.id}_{f.fingerprint}",
+                key=retained_key(f"proposal_reason_{p.id}_{f.id}_{f.fingerprint}"),
             )
             if st.button("Record this decision", key=f"proposal_record_{p.id}_{f.id}_{f.fingerprint}"):
                 try:
@@ -651,7 +676,7 @@ def rate_controls(p, records, officer):
         [r.id for r in roles],
         index=None,
         format_func=lambda rid: role_label(p, rid),
-        key="proposal_rate_role_" + p.id,
+        key=retained_key("proposal_rate_role_" + p.id),
     )
     if not rid:
         return
@@ -676,7 +701,7 @@ def rate_controls(p, records, officer):
             min_value=low,
             max_value=high,
             step=0.01,
-            key=prefix + "_range",
+            key=retained_key(prefix + "_range"),
             on_change=sync,
             args=(prefix + "_range", prefix + "_exact"),
         )
@@ -692,11 +717,13 @@ def rate_controls(p, records, officer):
         "Exact proposed monthly rate (SGD)",
         min_value=0.01,
         max_value=10000000.0,
-        key=prefix + "_exact",
+        key=retained_key(prefix + "_exact"),
         on_change=sync if bm["available"] else None,
         args=(prefix + "_exact", prefix + "_range") if bm["available"] else None,
     )
-    basis = st.text_input("Pricing basis for a custom or unsupported allowance", key=prefix + "_basis")
+    basis = st.text_input(
+        "Pricing basis for a custom or unsupported allowance", key=retained_key(prefix + "_basis")
+    )
     if bm["available"] and exact is not None and not bm["minimum"] <= exact <= bm["maximum"]:
         st.caption(
             "The exact amount is outside the observed range. The range bar does not replace it; record the relevant pricing basis."
@@ -800,7 +827,8 @@ def check_page(p, records, officer, cfg):
                 + ". No inflation adjustment is applied automatically."
             )
             treatment = st.text_area(
-                "Shared treatment of the reference-year difference", key="proposal_shared_year_note_" + p.id
+                "Shared treatment of the reference-year difference",
+                key=retained_key("proposal_shared_year_note_" + p.id),
             )
             if st.button(
                 "Record reference-year treatment",
@@ -829,7 +857,9 @@ def check_page(p, records, officer, cfg):
                     st.error(str(error))
     with operations:
         operational_controls(p, officer)
-        question = st.text_area("Optional targeted assistant question", key="proposal_question_" + p.id)
+        question = st.text_area(
+            "Optional targeted assistant question", key=retained_key("proposal_question_" + p.id)
+        )
         st.caption(
             "Only an explicit request below uses the configured model. No automatic calls occur while editing, saving or navigating."
         )
@@ -940,13 +970,13 @@ def check_page(p, records, officer, cfg):
     note = st.text_area(
         "Shared operational basis or specific retained scope uncertainty",
         value=p.drafts.get("deployment_note", ""),
-        key="proposal_operational_note_" + p.id,
+        key=retained_key("proposal_operational_note_" + p.id),
         placeholder="What supports retaining this proposed deployment? If coverage is not established, state the specific uncertainty and how it will be checked.",
     )
     p.drafts["deployment_note"] = note
     checked = st.checkbox(
         "I have checked the proposal context, roles, quantities/units, rates, capability and future costs, including retained qualifications",
-        key="proposal_checked_" + p.id,
+        key=retained_key("proposal_checked_" + p.id),
     )
     state = assessment(p, records)
     if state["blockers"] or state["unresolved"]:
@@ -1171,7 +1201,7 @@ def render(cfg, store, owner):
             return False
 
     with st.sidebar:
-        st.caption("TRACK 2 · PROPOSAL REVIEW")
+        st.caption("MANPOWER BUDGETING · REVIEW PROPOSED BUDGET")
         st.write(
             "Saved"
             if st.session_state.get("proposal_saved_hash") == digest(p)
@@ -1186,15 +1216,12 @@ def render(cfg, store, owner):
             list(choices),
             format_func=choices.get,
             index=None,
-            key="proposal_saved_selection",
+            key=retained_key("proposal_saved_selection"),
         )
         if st.button("Resume proposal", disabled=selected is None, key="proposal_resume"):
             st.session_state.proposal_switch = selected
         if st.button("New proposal review", key="proposal_new"):
             st.session_state.proposal_switch = "new"
-        if st.button("Back to track selection", key="proposal_back_tracks"):
-            st.session_state.selected_track = None
-            st.rerun()
         snapshot_slot = st.empty()
         restore = st.file_uploader(
             "Restore proposal snapshot", type=["json"], key="proposal_restore_file", max_upload_size=40
@@ -1230,7 +1257,7 @@ def render(cfg, store, owner):
             index=0 if p.stage == 1 else 1,
             format_func=lambda x: steps[x],
             horizontal=True,
-            key=f"proposal_navigation_{p.id}_{p.stage}",
+            key=retained_key(f"proposal_navigation_{p.id}_{p.stage}"),
         )
         if selected_stage != p.stage:
             p.stage = selected_stage

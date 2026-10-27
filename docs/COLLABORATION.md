@@ -1,6 +1,6 @@
 # Collaboration guide
 
-This baseline preserves Track 1 and adds an independent three-screen Track 2 review. Readiness and limitations are listed in [HANDOVER.md](HANDOVER.md); local implementation does not imply a finished operational release. Integration with the teammate's Tracks 3/4 is deferred. Existing integration contracts and teammate work are preserved; no cross-track transfer workflow or branch merge is included.
+The local integration/sprint2 branch composes the current Agent 1 checkpoint and Agent 2 source without changing main or either remote branch. Both budgeting workflows and the two standalone tender-review workflows are available. Trusted budget/submission transfers, shared-data activation and Track 5 remain separate work. See SPRINT2_INTEGRATION.md for verification and limitations.
 
 ## Ownership across five tracks
 
@@ -22,9 +22,11 @@ This baseline preserves Track 1 and adds an independent three-screen Track 2 rev
 | Arithmetic and export | `services/calculations.py`, `export.py` | Shared: retain cent rounding, annual/base/option reconciliation and source attribution |
 | Retrieval and title context | `services/evidence.py`, `role_reference.py`, `data/` | Shared: synthetic fixtures only; reviewed titles are not validated prices |
 | Validation and storage | `services/workflow.py`, `storage.py`, `uploads.py` | Shared: owner isolation, revision conflicts and approval invalidation must remain tested |
-| Future Agent 2 | New `services/agent2/` and an Agent 2 UI module such as `agent2_views.py` | Teammate-owned; add only when implementing the agreed tracks, with minimal entry-point changes |
+| Agent 2 Track 3 | `services/agent2/track3.py`, `agent2_views.py`, `tests/test_agent2_track3.py` | Teammate-owned; preserve deterministic arithmetic, source provenance and decision boundaries |
+| Agent 2 Track 4 | `services/agent2/track4.py`, `agent2_track4_views.py` | Historical benchmarking prototype; direct cross-tenderer comparison remains incomplete |
+| Future Track 5 | Planned maintenance workflow | Require intended-use approval, source provenance and versioning before publication |
 
-The future locations are a convention, not implemented placeholder tracks. Add focused tests under `tests/` and documentation under `docs/` for each increment. Coordinate tests/fixtures shared across both agents. Agent 2's comparisons, tender assessment and historical maintenance require their own states and permissions; Agent 1's `final` confirmation is not approval of a tender or import.
+Add focused tests under `tests/` and documentation under `docs/` for each increment. Coordinate tests/fixtures shared across both agents. Track 3 and Track 4 keep separate comparison states and remain distinct from future Track 5 maintenance permissions; Agent 1's `final` confirmation is not approval of a tender or import.
 
 ## Work and pull requests
 

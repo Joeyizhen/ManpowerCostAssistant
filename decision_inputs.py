@@ -2,6 +2,7 @@
 
 import streamlit as st
 
+from activity_nav import retained_key
 from services.decision_basis import basis_errors, record_basis, retained_basis
 from services.journey import working_draft
 from services.manpower_checks import LOCAL_ACTOR
@@ -74,9 +75,9 @@ def basis_panel(plan, kind, records):
     saved = plan.basis_drafts.get(kind, defaults)
 
     def options(suffix, default):
-        return dict(key=prefix + suffix, on_change=keep_basis_draft, args=(prefix, kind)), saved.get(
-            suffix, default
-        )
+        return dict(
+            key=retained_key(prefix + suffix), on_change=keep_basis_draft, args=(prefix, kind)
+        ), saved.get(suffix, default)
 
     kwargs, default = options("_roles", needed)
     roles = st.multiselect(
@@ -132,7 +133,7 @@ def basis_panel(plan, kind, records):
     unit_confirmed = (
         st.checkbox(
             "Confirm these are inclusive manpower unit allowances, not salaries or full trade/service prices",
-            key=prefix + "_unit_confirmed",
+            key=retained_key(prefix + "_unit_confirmed"),
         )
         if kind == "rate"
         else True

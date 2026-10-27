@@ -6,6 +6,7 @@ from uuid import uuid4
 import pandas as pd
 import streamlit as st
 
+from activity_nav import retained_key
 from services.evidence import map_role
 from services.hybrid import (
     cell_text,
@@ -173,7 +174,7 @@ def project_screen(plan):
     st.text_input(
         "Proposed tender title",
         p.name if p.name != "Untitled project" else "",
-        key=prefix + "_name",
+        key=retained_key(prefix + "_name"),
         on_change=project_changed,
         placeholder="Appointment of FM Manpower for Site Corgi for 3 + 3 years",
     )
@@ -181,7 +182,7 @@ def project_screen(plan):
         BRIEF_LABEL,
         p.description,
         height=110,
-        key=prefix + "_brief",
+        key=retained_key(prefix + "_brief"),
         on_change=project_changed,
         placeholder="For example: A 15-storey office building with ground-floor retail, operating daily from 8am–10pm, with critical equipment requiring after-hours response.",
     )
@@ -191,7 +192,7 @@ def project_screen(plan):
         "Anticipated contract start date",
         start_text(p),
         placeholder="Jan 2028",
-        key=prefix + "_start",
+        key=retained_key(prefix + "_start"),
         on_change=project_changed,
         args=("start",),
         help="Month and year are enough for planning. An older year-only draft may keep its month unknown.",
@@ -200,7 +201,7 @@ def project_screen(plan):
         "Base term (years)",
         str(p.base_years) if p.base_years is not None else "",
         placeholder="e.g. 3",
-        key=prefix + "_base",
+        key=retained_key(prefix + "_base"),
         on_change=project_changed,
         help="Enter the number of base-contract years.",
     )
@@ -208,7 +209,7 @@ def project_screen(plan):
         "Option term (years)",
         str(p.option_years) if p.option_years is not None else "",
         placeholder="e.g. 3, or 0 if none",
-        key=prefix + "_option",
+        key=retained_key(prefix + "_option"),
         on_change=project_changed,
         help="Enter the number of option years; use 0 if there are none.",
     )
@@ -218,7 +219,7 @@ def project_screen(plan):
         st.date_input(
             "Exact contract start date",
             value=p.start,
-            key=prefix + "_exact",
+            key=retained_key(prefix + "_exact"),
             on_change=project_changed,
             args=("exact",),
             help="Needed only for date-specific policy adjustments or calendar-year price schedules. A planning month is not an exact date.",
@@ -377,7 +378,7 @@ def manpower_screen(plan):
         "Deployment context",
         labels,
         index=selected,
-        key=prefix + "_status",
+        key=retained_key(prefix + "_status"),
         horizontal=True,
         on_change=current_status_changed,
         args=(prefix + "_status",),
@@ -482,13 +483,16 @@ def manpower_screen(plan):
         st.session_state.six_epoch = st.session_state.get("six_epoch", 0) + 1
         st.rerun()
     scope = st.radio(
-        "Role list", ["Suggested roles", "Browse all roles"], horizontal=True, key=prefix + "_scope"
+        "Role list",
+        ["Suggested roles", "Browse all roles"],
+        horizontal=True,
+        key=retained_key(prefix + "_scope"),
     )
     selected = st.multiselect(
         "Add another role",
         role_options(plan, scope),
         accept_new_options=True,
-        key=prefix + "_add",
+        key=retained_key(prefix + "_add"),
         placeholder="Choose a role or type a custom title; roles already in the table are hidden",
     )
     if st.button("Add selected roles", key="add_selected_roles", disabled=not selected):
@@ -512,7 +516,7 @@ def manpower_screen(plan):
         st.text_area(
             "Anything not covered in the table",
             plan.input_support,
-            key=prefix + "_support",
+            key=retained_key(prefix + "_support"),
             height=85,
             on_change=support_changed,
             args=(prefix + "_support",),

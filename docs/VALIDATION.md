@@ -1,3 +1,18 @@
+# 27 October 2026 — Sprint 2 combined navigation
+
+- Agent 1 pre-checkpoint regression: **256 passed in 248.42 seconds**.
+- Combined focused regression: **75 passed in 160.67 seconds**.
+- Complete combined suite: **295 passed in 297.81 seconds**.
+- After the final restore/default-input fix: **35 affected checks passed in 53.94 seconds**, including activity navigation, retained checkbox answers, proposal/results safeguards and grouped future/PWM journeys.
+- The navigation tests open all four workflows and preserve independent drafts across Back and Change activity. Synthetic tender comparisons and exports retain the existing service results. A failing model-client guard verifies no ordinary navigation/calculation invokes AI, even with configured credentials.
+- Agent 1's actual saved project remains identical at revision 14/version 54. Five reference hashes match the preserved baseline. Calculator/model/storage/contract implementations are unchanged from the checkpoint; Agent 2 calculation services match a7923f3 exactly. No v2 workbook was imported or activated.
+
+Browser checks opened both activity menus and all four task entries at 985-pixel width, then verified recovery of the unchanged synthetic budget draft after visiting both tender workflows.
+
+See [SPRINT2_INTEGRATION.md](SPRINT2_INTEGRATION.md) for capability boundaries and the remaining handoff work. Native Excel recalculation, live model quality and production deployment remain outside this milestone. Older entries are historical.
+
+---
+
 # 27 October 2026 — independent Track 1 and Track 2 verification
 
 - Final affected regression: **82 passed in 73.02 seconds** across proposal services/UI, Track 1 results, decisions, agent mocks, annual-reference and PWM safeguards.

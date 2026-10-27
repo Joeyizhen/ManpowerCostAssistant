@@ -6,13 +6,14 @@ from types import SimpleNamespace
 import pandas as pd
 import streamlit as st
 
+from activity_nav import retained_key
 from services.calculations import budget
 from services.decision_basis import meaningful, record_basis
 from services.models import PWMConfig
 from services.pwm import catalog, get_schedule, validate_pwm
 from services.workflow import apply_change
 
-GROUPED_UI_VERSION = 11
+GROUPED_UI_VERSION = 12
 
 
 def select_general_increase(prefix, percent, custom):
@@ -89,7 +90,7 @@ def role_overrides(plan):
         list(roles),
         default=existing,
         format_func=lambda rid: roles[rid],
-        key=f"future_overrides_{plan.id}",
+        key=retained_key(f"future_overrides_{plan.id}"),
         on_change=retain_individual_drafts,
     )
 
@@ -131,7 +132,11 @@ def pwm_form(plan, role, officer, on_draft=None):
             st.session_state.pop(prefix + "_" + name, None)
 
     def params(name):
-        return dict(key=prefix + "_" + name, on_change=on_draft or keep_pwm_draft, args=(prefix, role.id))
+        return dict(
+            key=retained_key(prefix + "_" + name),
+            on_change=on_draft or keep_pwm_draft,
+            args=(prefix, role.id),
+        )
 
     def prior(name, default=None):
         value = saved.get(name, getattr(c, name, default) if c else default)
@@ -417,7 +422,7 @@ def tender_choices(plan, role, records, benchmark, officer):
         "Tender-derived reference or custom assumption",
         [*options, "Custom assumption"],
         index=3,
-        key=f"tender_choice_{plan.id}_{role.id}",
+        key=retained_key(f"tender_choice_{plan.id}_{role.id}"),
     )
     if chosen in options and st.button("Select reference profile", key=f"tender_apply_{plan.id}_{role.id}"):
         payload = role.model_dump(mode="json")
@@ -460,7 +465,7 @@ def shared_future_assumption(plan, officer):
     current = (profiles[0][1] * 100 if plan.profile.years > 1 else 0.0) if uniform else None
 
     def params(field):
-        return dict(key=prefix + "_" + field, on_change=keep_common_draft, args=(prefix,))
+        return dict(key=retained_key(prefix + "_" + field), on_change=keep_common_draft, args=(prefix,))
 
     st.markdown("### General annual allowance")
     st.write(
@@ -694,7 +699,7 @@ def future_screen(plan, records, officer, save):
     ]
 
     def params(field):
-        return dict(key=prefix + "_" + field, on_change=keep_group_draft, args=(prefix,))
+        return dict(key=retained_key(prefix + "_" + field), on_change=keep_group_draft, args=(prefix,))
 
     active = [r.id for r in roles.values() if r.pwm]
     # A suggested title is not an assignment or eligibility confirmation.
@@ -845,7 +850,7 @@ def future_screen(plan, records, officer, save):
                         value=None,
                         step=0.01,
                         format="%.2f%%",
-                        key=prefix + "_percent",
+                        key=retained_key(prefix + "_percent"),
                         on_change=synced,
                         args=("percent",),
                         disabled=yearly_enabled,
@@ -860,7 +865,7 @@ def future_screen(plan, records, officer, save):
                     min_value=low,
                     max_value=high if low < high else None,
                     step=0.01,
-                    key=prefix + "_exact",
+                    key=retained_key(prefix + "_exact"),
                     on_change=synced,
                     args=("exact",),
                     disabled=yearly_enabled,

@@ -19,6 +19,9 @@ ROOT_FILES = {
     "requirements.txt",
     "uv.lock",
     "app.py",
+    "activity_nav.py",
+    "agent2_views.py",
+    "agent2_track4_views.py",
     "hybrid_inputs.py",
     "journey_inputs.py",
     "decision_inputs.py",
@@ -66,7 +69,7 @@ def allowed(path):
     if path in ROOT_FILES or path in {".streamlit/config.toml", ".streamlit/secrets.example.toml"}:
         return True
     if p.parts[0] in {"services", "scripts", "tests"}:
-        return p.suffix in {".py", ".ps1"} and "__pycache__" not in p.parts
+        return p.suffix in {".py", ".ps1", ".mjs"} and "__pycache__" not in p.parts
     if p.parts[0] == "docs":
         return p.suffix == ".md"
     if p.parts[0] == "contracts":
