@@ -48,7 +48,16 @@ def test_requirements_only_review_preserves_roles_and_revision():
     accept_review(p, "Synthetic officer", records)
     assert {r.id: r.quantity for r in working_draft(p).roles} == original
     role = working_draft(p).roles[0].model_dump(mode="json")
-    update_notes(p, roles=[{**role, "quantity": 2, "quantity_reason": "Officer revised earlier headcount"}])
+    update_notes(
+        p,
+        roles=[
+            {
+                **role,
+                "quantity": 2,
+                "quantity_reason": "Two officers cover separate occupied buildings during the overlapping daytime shift",
+            }
+        ],
+    )
     assert len(working_draft(p).roles) == len(original)
     assert next(r.quantity for r in working_draft(p).roles if r.id == role["id"]) == 2
     assert prepare_review(p, "manpower", records)["ready"]
@@ -95,7 +104,7 @@ def test_seniority_and_combined_title_preserved_without_invented_rate():
                 "mapped_role": None,
                 "mapping_reason": "",
                 "rate_origin": "Officer assumption",
-                "rate_reason": "Explicit synthetic officer assumption",
+                "rate_reason": "Synthetic contractor quotation covers the combined senior supervisory duties for this allowance",
             }
         ],
     )

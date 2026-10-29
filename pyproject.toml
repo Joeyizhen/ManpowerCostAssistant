@@ -1,7 +1,7 @@
 [project]
 name = "fm-manpower-cost-assistant"
 version = "0.1.0"
-description = "Track 1 conversational FM manpower budget planning"
+description = "FM manpower budgeting, proposal review and tender evaluation with two agents"
 requires-python = ">=3.11,<3.15"
 dependencies = [
   "streamlit[auth]>=1.50,<2",
@@ -13,10 +13,11 @@ dependencies = [
   "plotly>=6,<7",
   "xlsxwriter>=3.2,<4",
   "pypdf>=6,<7",
+  "openpyxl>=3.1,<4",
 ]
 
 [dependency-groups]
-dev = ["pytest>=8,<10", "ruff>=0.12,<1", "openpyxl>=3.1,<4"]
+dev = ["pytest>=8,<10", "ruff>=0.12,<1"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

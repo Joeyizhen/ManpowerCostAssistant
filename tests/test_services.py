@@ -243,7 +243,7 @@ def test_revision_invalidates_affected_approval_and_decisions(records):
     p = reviewed(demo_plan(), records)
     p.roles[0].rate = 25000  # Materially outside observed min–max, not just outside P25–P75.
     f = next(x for x in findings(p, records) if x.code == "rate_range")
-    record_decision(p, f, "accepted exception", "Officer explained rate scope", "Officer")
+    record_decision(p, f, "accepted exception", "Synthetic quotation includes additional night supervision and relief staffing beyond the reference scope", "Officer")
     role = next(r for r in p.roles if r.id == f.role_id)
     payload = role.model_dump(mode="json")
     payload["rate"] *= 2
@@ -264,8 +264,9 @@ def test_blocking_cannot_be_accepted(records):
 
 def test_final_requires_decisions_and_current_confirmations(records):
     p = reviewed(demo_plan(), records)
-    with pytest.raises(ValueError, match="Decision/justification"):
-        confirm(p, "final", "Officer", records)
+    p.roles[0].rate = 25000  # Material price outlier still needs a decision.
+    confirm(p, "final", "Officer", records)
+    assert p.roles[0].rate == 25000  # A benchmark difference alone is advisory.
     for f in findings(p, records):
         record_decision(
             p,
@@ -315,13 +316,60 @@ def test_excel_matches_app_formulas_charts_and_no_injection(records):
     output = export_excel(p, records)
     values = openpyxl.load_workbook(BytesIO(output), data_only=True)
     formulas = openpyxl.load_workbook(BytesIO(output), data_only=False)
-    assert len(values.sheetnames) == 9
+    assert len(values.sheetnames) == 10
     assert values["Budget summary"]["H8"].value == budget(p, records)["contract_total"]
     assert values["Budget summary"]["B11"].value == p.profile.name
     assert formulas["Budget summary"]["B11"].data_type == "s"
-    assert formulas["Annual calculations"]["O5"].value == "=L5+N5"
+    assert formulas["Annual calculations"]["O5"].value == "=L5+N5+S5"
     assert formulas["Annual calculations"]["K6"].value == "=ROUND(K5*J6,2)"
     assert len(formulas["Budget summary"]._charts) == 2
     app_rows = budget(p, records)["rows"]
     for i, row in enumerate(app_rows, 5):
         assert values["Annual calculations"][f"O{i}"].value == row["annual_cost"]
+
+
+def test_delete_project_requires_owner_and_reviewed_revision_and_removes_history(tmp_path):
+    from sqlalchemy import select
+
+    store = Store(f"sqlite:///{tmp_path / 'synthetic-deletion.db'}")
+    project, other = demo_plan(), demo_plan()
+    store.save(project, "alice", 0)
+    store.save(other, "alice", 0)
+    project.profile.name = "Synthetic revised project"
+    store.save(project, "alice", 1)
+    with pytest.raises(ValueError, match="saved project"):
+        store.delete(project.id, "alice", 0)
+    with pytest.raises(ConflictError):
+        store.delete(project.id, "bob", 2)
+    with pytest.raises(ConflictError):
+        store.delete(project.id, "alice", 1)
+    assert store.load(project.id, "alice")[1] == 2
+    store.delete(project.id, "alice", 2)
+    assert [r["id"] for r in store.list("alice")] == [other.id]
+    with pytest.raises(ValueError, match="not found"):
+        store.load(project.id, "alice")
+    with store.engine.connect() as conn:
+        assert not conn.execute(select(store.snapshots).where(store.snapshots.c.id == project.id)).all()
+        assert len(conn.execute(select(store.snapshots).where(store.snapshots.c.id == other.id)).all()) == 1
+
+
+def test_failed_history_deletion_rolls_back_project_removal(tmp_path):
+    from sqlalchemy import event, select
+
+    store = Store(f"sqlite:///{tmp_path / 'synthetic-delete-rollback.db'}")
+    project = demo_plan()
+    store.save(project, "alice", 0)
+
+    def reject_history_delete(conn, cursor, statement, parameters, context, executemany):
+        if statement.startswith("DELETE FROM snapshots"):
+            raise RuntimeError("Synthetic history-deletion failure")
+
+    event.listen(store.engine, "before_cursor_execute", reject_history_delete)
+    try:
+        with pytest.raises(RuntimeError, match="Synthetic"):
+            store.delete(project.id, "alice", 1)
+    finally:
+        event.remove(store.engine, "before_cursor_execute", reject_history_delete)
+    assert store.load(project.id, "alice")[1] == 1
+    with store.engine.connect() as conn:
+        assert len(conn.execute(select(store.snapshots).where(store.snapshots.c.id == project.id)).all()) == 1

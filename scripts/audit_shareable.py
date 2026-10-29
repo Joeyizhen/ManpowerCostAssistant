@@ -19,8 +19,19 @@ ROOT_FILES = {
     "requirements.txt",
     "uv.lock",
     "app.py",
+    "activity_nav.py",
+    "agent2_views.py",
+    "agent2_track4_views.py",
     "hybrid_inputs.py",
     "journey_inputs.py",
+    "decision_inputs.py",
+    "future_inputs.py",
+    "pricing_inputs.py",
+    "proposal_inputs.py",
+    "proposal_journey.py",
+    "review_inputs.py",
+    "selection_controls.py",
+    "ui_drafts.py",
 }
 EXCLUDED_PROBES = [
     ".env",
@@ -60,7 +71,7 @@ def allowed(path):
     if path in ROOT_FILES or path in {".streamlit/config.toml", ".streamlit/secrets.example.toml"}:
         return True
     if p.parts[0] in {"services", "scripts", "tests"}:
-        return p.suffix in {".py", ".ps1"} and "__pycache__" not in p.parts
+        return p.suffix in {".py", ".ps1", ".mjs"} and "__pycache__" not in p.parts
     if p.parts[0] == "docs":
         return p.suffix == ".md"
     if p.parts[0] == "contracts":
@@ -70,12 +81,39 @@ def allowed(path):
         "evaluation/TOOLS.md",
         "evaluation/cases.json",
         "data/reference/role_titles.json",
+        "data/reference/pwm-2026-10-19.json",
     }:
         return True
     return p.parts[:2] == ("data", "sample") and p.suffix in {".json", ".md"}
 
 
 def issues_for(path, content):
+    if path in {
+        "data/templates/track2-blank-template.xlsx",
+        "data/templates/track2-example-proposal.xlsx",
+        "data/templates/track2-preplanned-budget-sample.xlsx",
+    }:
+        import zipfile
+
+        try:
+            with zipfile.ZipFile(BytesIO(content)) as archive:
+                if sum(item.file_size for item in archive.infolist()) > 500000:
+                    return ["unexpected proposal-template size"]
+                if any(
+                    "externalLink" in name or "vbaProject" in name or "connections" in name
+                    for name in archive.namelist()
+                ):
+                    return ["proposal template contains external links or macros"]
+                value = "\n".join(
+                    archive.read(name).decode("utf-8") for name in archive.namelist() if name.endswith(".xml")
+                )
+                return (
+                    ["private or credential-shaped value in proposal template"]
+                    if SECRET.search(value) or PRIVATE.search(value)
+                    else []
+                )
+        except (ValueError, zipfile.BadZipFile, UnicodeDecodeError):
+            return ["invalid proposal workbook template"]
     issues = []
     if not allowed(path):
         issues.append("outside reviewed shareable file categories")
@@ -103,6 +141,17 @@ def issues_for(path, content):
                 issues.append("dataset lacks explicit synthetic provenance")
         except (ValueError, AttributeError):
             issues.append("invalid synthetic JSON fixture")
+    if path == "data/reference/pwm-2026-10-19.json":
+        payload = json.loads(value)
+        schedules = payload.get("schedules", [])
+        if not schedules or any(
+            not r.get("source", "").startswith("https://www.mom.gov.sg/")
+            or not r.get("verified_on")
+            or not r.get("valid_until")
+            or not r.get("points")
+            for r in schedules
+        ):
+            issues.append("official policy snapshot lacks MOM source/date/wage provenance")
     if path == "data/reference/role_titles.json":
         payload = json.loads(value)
         if (

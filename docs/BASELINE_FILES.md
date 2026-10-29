@@ -1,23 +1,25 @@
-# Reviewed baseline contents
+# Shareable application contents
 
-## Intended tracked files
+## Publication set
 
-The reviewed initial candidate set contains **65 files**. No remaining-track implementation is added.
+The consolidated app includes both agents, all required UI/controller/service modules, tests, versioned contracts, runtime/development dependency manifests, the lockfile, Docker packaging and blank private-configuration examples.
 
-- Existing application: `app.py`, `hybrid_inputs.py`, `journey_inputs.py`, `services/`, tests and development scripts. Track 1 implementation remains in place.
-- Reproducible setup: `pyproject.toml`, `uv.lock`, hashed runtime `requirements.txt`, Dockerfile, safe blank environment/Streamlit examples, public theme settings, ignore/line-ending rules and setup/deployment instructions.
-- Shared collaboration contracts: `services/integration_contracts.py`, two JSON schemas, deterministic fixture generator and an explicitly synthetic approved-budget example. No Agent 2 comparison/import logic.
-- Synthetic evidence: existing invented schedules and reviewed role-title context. No source workbooks or validated real tender prices.
-- Sanitised documentation in `docs/`, `evaluation/PLAN.md`, `evaluation/TOOLS.md`, reserved/development case definitions and current data requirements.
+Publishable runtime data is limited to labelled synthetic JSON fixtures, reviewed title context, the dated PWM catalogue and three explicitly authored proposal workbooks:
 
-## Excluded and preserved locally
+- `data/templates/track2-blank-template.xlsx`
+- `data/templates/track2-preplanned-budget-sample.xlsx`
+- `data/templates/track2-example-proposal.xlsx` (deliberate-error regression fixture)
 
-API keys/credentials, `.env` files, real Streamlit secrets, raw BCT/real tender documents/records, local databases, uploads, outputs/private traces/screenshots/workbooks, environments/caches, logs, temporary files, notebooks and credential containers. Root private build brief/handover/implementation/validation notes and historical development reviews are ignored; shareable replacements are linked from README. Private originals of rewritten setup/protocol documents were copied to ignored local storage before editing.
+The ordinary sample and Site Xtown loader work on a clean checkout. No private prepared workbook/database is needed to launch both activities.
 
-The previous prototype and unrelated projects lie outside this root and are untouched. They are not copied into this repository. Git metadata, author settings and audit clones are not staged application files. The bare remote audit clone is in ignored local storage.
+## Excluded material
 
-## Verification
+Credentials, real secrets, private source workbooks/raw records, local databases, saved officer projects, uploads, local activation pointers, outputs/evidence logs, environments/caches and personal session handoffs remain local. The Git and Docker ignore rules enforce these boundaries. Original local working files and Git history were checkpointed before consolidation.
 
-Before the baseline commit, review `git diff --cached --stat` and run `python -m scripts.audit_shareable`. It scans the complete index, checks representative exclusions and labels, and reports only paths/rule failures rather than sensitive contents. The initial commit is prepared only after successful checks, confirmed repository-local author identity and verification of compatible remote history. Publication remains unauthorised until explicitly requested.
+Shareable documentation explains methods and limits without reproducing private source quotations or saved-project identifiers. Historical implementation notes describe their dated milestones; the README, deployment guide and current consolidation report define current behaviour.
 
-Initial preparation result: 65 indexed files, 23 exclusion probes, zero audit findings; 105 automated tests passed. Safe configuration examples contain blank credentials. No application source/controller/calculation behaviour was changed by this collaboration preparation.
+## Audit
+
+Before publishing, review the exact staged list and run `python -m scripts.audit_shareable`. The script reads all indexed blobs, checks paths, credential/private-path patterns, explicit synthetic provenance, authored workbook structure and representative private exclusions. It complements manual privacy review.
+
+Use a clean export/checkout containing only indexed files to verify both agents. [VALIDATION.md](VALIDATION.md) records actual checks and their limits. Never treat an older baseline audit as certification of a later index.

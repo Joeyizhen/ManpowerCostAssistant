@@ -1,0 +1,47 @@
+# Track 1 officer journey refinement — 28 October 2026
+
+**Superseded journey layout:** the later [five-step increment](TRACK1_FIVE_STEP.md) merges deployment confirmation and adds direct step navigation. The investigation and safeguards below remain historical context.
+
+This increment continues the existing implementation on `integration/sprint2`. The six screens are now **Project details → Deployment → Confirm deployment → Starting monthly rates → Annual manpower cost changes → Budget summary**. Existing projects, rates, source snapshots, PWM schedules and calculator formulas remain intact. No unrelated track merge, push, deployment or paid model call is included.
+
+## Changes by screen
+
+| Screen | Officer experience |
+|---|---|
+| Project details | Project name, operational brief, anticipated month, base/option years and calculated duration. Continue validates on an attempted submission; an untouched form is not presented as an error. Exact dates are requested only when PWM, calendar quotes or dated adjustments need them. Older year-only inputs remain readable. |
+| Deployment | One editable table containing the officer's added/stored roles. A searchable Add role control accepts custom titles. There is no automatically required eight-role checklist, copy/apply cycle or unused-role zeroing exercise. Explicit saved exclusions remain preserved. Current and difference columns appear only for existing deployment. Headcount and FTE totals remain separate. |
+| Confirm deployment | Editable deployment, recorded reasons and material numerical discrepancies. Exactly two main actions: **Confirm deployment and continue** and **Ask assistant to refine deployment**. AI review is optional. Assistant proposals show the officer's current draft versus suggested values/units/remarks, and need separate acceptance. Accepting a suggestion stays on this screen and does not confirm deployment, rates or the final budget. |
+| Starting monthly rates | One unrestricted valid numeric allowance per role, confirmed quantity/unit, calculated monthly role cost and qualified reference context. Separate custom mode, slider and repeated markers are removed. Reference details contain observations/methods; optional document fields and one shared pricing explanation sit below/beside the relevant controls. Valid recorded explanations are reused. Monthly and authoritative annual starting amounts are shown. |
+| Annual manpower cost changes | Supported general annual reference average for a new unselected non-PWM plan, lower/average/higher references, one directly editable selected percentage, and projected cost impact. Empty profiles are not treated as an officer-selected zero. Explicit saved 0%, supplied yearly profiles, distinct role-specific constant increases, quotes and rationales are retained. Different increases by year remain advanced; replacing a saved profile requires an explicit choice. No custom-mode switch is needed. |
+| Budget summary | Full/base/option totals, selected assumptions, short outstanding actions and four tabs. The annual chart/table separates starting-rate cost, accumulated general increases, PWM and other adjustments, annual totals and prior-year changes. Scenarios use a compact three-row comparison. Previewing changes nothing; explicit scenario adoption invalidates future/final confirmation and returns to Step 5. Ordinary benchmark differences do not become mandatory decisions. |
+
+There is one sidebar **Save draft** action and one saved/unsaved status. Confirmation checkpoints remain separate from saving. Unrecorded shared operational text/role selections are stored in draft state and can be reopened; they must be recorded or cleared before confirmation. A single operational reason can cover related roles. Retained valid role-level/shared reasons are not requested again, including compatible legacy reasons. Headcount and FTE are never added together to test a shared numerical claim.
+
+New roles have unanswered quantities until entered. Zero is still an explicit exclusion. Older genuinely unused suggested rows can be removed together through an explicit compatibility action, without inventing zero quantities. Original titles, seniority, combined roles, individual line identities and prior decisions are preserved.
+
+## Source comparability investigation
+
+The private source investigation found that quoted monthly charges mix deployment allocations with unverified hours, relief and inclusions. An integer quantity does not establish a dedicated full-time worker. Multiplying or dividing a fractional allocation cannot certify a comparable per-person rate.
+
+Observed min/max cover source quotes; averages/quartiles use submission representatives. Neither population establishes operational equivalence. No observations were trimmed or modified for presentation. Exact source quotations, record identifiers and source-cell evidence remain in private local verification files.
+
+The current interface uses clearly labelled authored illustrative allowances when no comparable recommendation is available. See the README and reference-provisioning document for current behaviour; the screen layout below describes its historical milestone.
+
+## Calculation and confirmation safeguards
+
+- The calculation engine is unchanged. Starting-rate cost values each year's selected deployment at its confirmed starting rate. Accumulated general/PWM changes and other adjustments are additions to that baseline, not a second copy of the base charge. Prior-year change is calculated separately from annual totals.
+- The Step 4 annual metric now follows the calculator's annual amount. Fractional FTE can make it differ slightly from twelve times the rounded displayed monthly subtotal. The existing annual-role rounding rule is retained and briefly disclosed.
+- A constant general percentage compounds from Year 2. The reference remains quoted manpower-charge movement, not CPI or an official wage forecast. Unsupported values are recorded as officer assumptions; no missing percentage is silently selected as zero.
+- PWM retains confirmed eligibility/category, covered-worker counts, known salary components, employer-cost evidence, effective dates, published horizon and explicit unpublished treatment. No increase is applied to an entire inclusive contractor rate by assuming a salary split. General increases do not overlap the PWM component. Existing calendar-month limits remain; partial-month PWM/FTE conversions are not newly invented.
+- Exact-date entry is offered at the calculation that needs it. Confirming the same anticipated costing date does not make the officer repeat an unchanged deployment. A genuinely changed exact day affecting dated adjustments invokes existing confirmation invalidation. Existing calendar-year quotes retain their 1 January constraint.
+- Scenario previews are read-only. Adoption shifts only assumed non-PWM Year 2 onward percentages by the displayed ±1 percentage point; quantities, starting rates, quotes, PWM and nominal component adjustments stay fixed. Invalid scenarios are rejected atomically. Future/final confirmations must be renewed.
+- Reconfirming an unchanged deployment does not invalidate later valid decisions. Reusing the same annual percentage retains its recorded reason/source instead of reclassifying it as a new database selection. Distinct saved role percentages require explicit replacement, even when each role uses a constant percentage.
+- A benchmark difference alone is advisory. Missing/invalid inputs, changed decision bases, unrecorded edits and material contradictory claims remain distinct. Current recorded professional reasoning is reused for matching qualifications; genuinely changed values/context still need review.
+
+## Verification and remaining boundaries
+
+The regression suite was adapted to the requested interactions rather than retaining tests for removed sliders, modes and third deployment actions. Isolated tests cover new non-PWM Steps 1–6, mixed PWM component reconciliation, saved/reopened drafts, shared-reason draft persistence, material revisions, acceptance of assistant proposals, direct rate entry, annual compounding, scenario isolation/adoption and reference-switch preservation. Live model calls are mocked or disabled. Browser verification uses a separate preview database and synthetic inputs, not the officer's saved projects.
+
+A full intermediate run passed **318 tests**. The browser walkthrough then identified distinct saved constant percentages that also needed the existing explicit replacement guard; a regression was added. The final frozen-code suite passed **321 tests in 259.72 seconds**. Visual checks and preservation hashes are recorded in `VALIDATION.md`. Early UI runs stalled in the Windows sandbox temporary directory; workspace-owned TEMP/TMP storage produced the normal complete run. These infrastructure stalls are not reported as successful tests.
+
+Reference unit/scope alignment remains unresolved; the interface now makes that consequence visible without fabricating a recommended monthly price. PWM eligibility/salary components and unpublished periods still require real evidence/officer choices. Direct cross-tender comparison, live budget transfer, full historical-data administration, OCR and operational market validation remain outside this increment. Sources, formula/rounding rules and saved figures were not rewritten to make the interface look cleaner.
