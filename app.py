@@ -109,42 +109,39 @@ if "review_open" not in st.session_state:
     st.session_state.review_open = False
 
 if st.session_state.selected_track is None:
-    st.caption("FM MANPOWER COST ASSISTANT")
+    st.caption("FM MANPOWER COST ASSISTANT · AGENT 2")
     st.title("What would you like to do?")
     st.write("Choose a starting point. We’ll work through it together, one step at a time.")
-    build, review, tender, proposal = st.columns(4, gap="large")
-    with build:
+    budget_comparison, tender_review = st.columns(2, gap="large")
+    with budget_comparison:
         with st.container(border=True):
-            st.caption("TRACK 1")
-            st.subheader("Build a new plan")
-            st.write("Describe your project. Establish the duties and people needed, then review the budget.")
-            if st.button("Build new plan", key="choose_track_1", type="primary", width="stretch"):
-                st.session_state.selected_track = 1
-                st.rerun()
-    with review:
-        with st.container(border=True):
-            st.caption("TRACK 2 · PLANNED")
-            st.subheader("Review a proposed plan")
-            st.write(
-                "Check an existing manpower proposal and its assumptions. This journey is planned for a later release."
-            )
-            if st.button("Review proposed plan", key="choose_track_2", width="stretch"):
-                st.session_state.selected_track = 2
-                st.rerun()
-    with tender:
-        with st.container(border=True):
-            st.caption("AGENT 2 · TRACK 3")
+            st.caption("TRACK 3")
             st.subheader("Compare against approved budget")
-            st.write("Compare multiple manpower proposals against an approved budget.")
-            if st.button("Start comparing", key="choose_track_3", width="stretch"):
+            st.write(
+                "Compare multiple manpower proposals against an approved budget, validate the "
+                "submitted data and identify important cost or staffing differences."
+            )
+            if st.button(
+                "Start budget comparison",
+                key="choose_track_3",
+                type="primary",
+                width="stretch",
+            ):
                 st.session_state.selected_track = 3
                 st.rerun()
-    with proposal:
+    with tender_review:
         with st.container(border=True):
-            st.caption("AGENT 2 · TRACK 4")
+            st.caption("TRACK 4")
             st.subheader("Review and compare tenderer proposals")
-            st.write("Spot unusual pricing, understand key differences and know what to clarify.")
-            if st.button("Start tender review", key="choose_track_4", width="stretch"):
+            st.write(
+                "Compare tenderers with similar past submissions, spot unusual pricing and "
+                "prepare the questions that require clarification."
+            )
+            if st.button(
+                "Start tender review",
+                key="choose_track_4",
+                width="stretch",
+            ):
                 st.session_state.selected_track = 4
                 st.rerun()
     st.caption("Your current draft is retained when switching tracks.")
