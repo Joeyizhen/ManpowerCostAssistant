@@ -13,7 +13,7 @@ ROLES = [
     "Facilities Manager",
     "Assistant Facilities Manager",
     "Property Officer",
-    "Admin Executive",
+    "Administrative Assistant",
     "Technician",
     "BMS Engineer",
     "Customer Service Officer",
@@ -26,6 +26,10 @@ ALIASES = {
     "afm": "Assistant Facilities Manager",
     "assistant fm": "Assistant Facilities Manager",
     "po": "Property Officer",
+    "admin executive": "Administrative Assistant",
+    "admin exec": "Administrative Assistant",
+    "admin assistant": "Administrative Assistant",
+    "administrative asst": "Administrative Assistant",
     "tech": "Technician",
     "m&e technician": "Technician",
 }
@@ -66,7 +70,40 @@ class EvidenceRow(StrictModel):
 
 def load_records() -> list[dict]:
     path = Path(__file__).resolve().parents[1] / "data/sample/historical.json"
-    return [EvidenceRow.model_validate(r).model_dump() for r in json.loads(path.read_text())]
+    records = json.loads(path.read_text())
+    # Administrative Assistant is the canonical comparison role. Historical
+    # schedules used the equivalent title "Admin Executive"; retain the raw
+    # submitted title while normalising its verified comparison category.
+    for record in records:
+        if record.get("standard_role") == "Admin Executive":
+            record["standard_role"] = "Administrative Assistant"
+    # Keep Track 3 and Track 4 role coverage aligned for the demonstration
+    # database. These are labelled derived fixture records, not market data.
+    derived_roles = {
+        "Senior Facilities Manager": ("Facilities Manager", 1.35),
+        "BMS/BOS Officer": ("BMS Engineer", 0.90),
+        "Cleaning Supervisor": ("Customer Service Officer", 1.05),
+        "Helpdesk Officer": ("Customer Service Officer", 0.95),
+        "M&E Engineer": ("Environmental Engineer", 1.00),
+        "Property Executive": ("Property Officer", 1.05),
+        "Security Supervisor": ("Customer Service Officer", 1.15),
+    }
+    derived = []
+    for role, (source_role, multiplier) in derived_roles.items():
+        for record in records:
+            if record.get("standard_role") != source_role:
+                continue
+            clone = dict(record)
+            slug = role.casefold().replace("&", "and").replace("/", "-").replace(" ", "-")
+            clone["record_id"] = f"{record['record_id']}-{slug}"
+            clone["raw_role_name"] = role
+            clone["standard_role"] = role
+            clone["unit_rate_monthly"] = round(float(record["unit_rate_monthly"]) * multiplier, 2)
+            clone["data_origin"] = "derived synthetic demonstration fixture"
+            clone["source"] = f"Derived demonstration comparator for {role}"
+            derived.append(clone)
+    records.extend(derived)
+    return [EvidenceRow.model_validate(r).model_dump() for r in records]
 
 
 def quantile(values, p):

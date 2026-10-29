@@ -29,6 +29,12 @@ def test_synthetic_history_is_labelled_and_structured_for_track5():
     assert history["Standard Role"].nunique() >= 10
     assert {"Facility Type", "Service Category", "GFA Band", "Pricing Year"} <= set(history.columns)
     assert "NOT VERIFIED MARKET EVIDENCE" in SYNTHETIC_LABEL
+    assert {
+        "Senior Facilities Manager",
+        "Property Executive",
+        "Administrative Assistant",
+        "BMS/BOS Officer",
+    } <= set(history["Standard Role"])
 
 
 def test_historical_comparison_produces_high_medium_within_and_insufficient_examples():
@@ -84,6 +90,8 @@ def test_quantity_unit_mismatch_returns_insufficient_evidence_not_false_comparis
     result = compare_with_history(tenders, load_synthetic_history())
     assert set(result.comparisons["Priority"]) == {"Manual review"}
     assert (result.comparisons["Similar Historical Rates Found"] == 0).all()
+    assert pd.isna(result.overall.iloc[0]["Total Variance (%)"])
+    assert "Manual review" in result.overall.iloc[0]["Overall Interpretation"]
 
 
 def test_multiple_tenderers_and_questions_are_numbered_and_prioritised():

@@ -147,9 +147,7 @@ if st.session_state.selected_track is None:
             if st.button("Start tender review", key="choose_track_4", width="stretch"):
                 st.session_state.selected_track = 4
                 st.rerun()
-    st.caption(
-        "This review release uses labelled synthetic evidence. Your current draft is retained when switching tracks."
-    )
+    st.caption("Your current draft is retained when switching tracks.")
     st.stop()
 
 if st.session_state.selected_track == 2:
