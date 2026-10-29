@@ -140,6 +140,7 @@ if st.session_state.selected_track is None:
             if st.button(
                 "Start tender review",
                 key="choose_track_4",
+                type="primary",
                 width="stretch",
             ):
                 st.session_state.selected_track = 4
