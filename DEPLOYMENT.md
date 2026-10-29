@@ -4,7 +4,7 @@ The complete application starts with `app.py`; both agents are included. Publish
 
 ## Fresh local checkout
 
-Check out the consolidation PR branch, or use `main` after review/merge. Python 3.14 is the tested development version; the project declares `>=3.11,<3.15`.
+Use the default `main` branch for the combined Sprint 2 application. It provides both Manpower budgeting and Tender evaluation from `app.py`, plus the Site Xtown example. Python 3.14 is the tested development version; the project declares `>=3.11,<3.15`.
 
 ```powershell
 uv sync --frozen --python 3.14

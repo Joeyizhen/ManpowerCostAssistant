@@ -14,7 +14,7 @@ The GitHub fetch found the teammate's `feature/agent2` at `c8e42e2`. Its three n
 
 Earlier teammate commits `88248da` and `a7923f3` remain ancestors of the combined branch. The user referred to this teammate contribution as “track 2”; the branch/entrypoints establish that it is Agent 2, whose implemented workflows are Tracks 3/4. Agent 1's Track 2 is still proposal review.
 
-The consolidation uses a merge to preserve teammate history and a PR into `main` for shared review. It does not force-push either developer branch or silently merge the PR.
+The consolidation preserves both source histories and is published to the default `main` branch through PR #1 at the team's request. A normal clone now contains both activities and the Site Xtown example. Neither developer branch is force-pushed or overwritten; ongoing changes continue through the branch/PR workflow.
 
 ## Integrated behaviour
 

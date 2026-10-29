@@ -1,6 +1,6 @@
 # Shareable release checkpoint — 30 October 2026
 
-The complete app is consolidated from `integration/sprint2` and the teammate's `feature/agent2` branch through a reviewable branch/PR. See [SPRINT2_INTEGRATION.md](SPRINT2_INTEGRATION.md) for exact source commits, and [VALIDATION.md](VALIDATION.md) for checks.
+The complete app is consolidated from `integration/sprint2` and the teammate's `feature/agent2` branch and published to the default `main` branch through PR #1. A normal clone provides both Manpower budgeting and Tender evaluation, including the Site Xtown example. See [SPRINT2_INTEGRATION.md](SPRINT2_INTEGRATION.md) for exact source commits, and [VALIDATION.md](VALIDATION.md) for checks.
 
 ## Behaviour to retain
 

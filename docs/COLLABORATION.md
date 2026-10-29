@@ -1,10 +1,10 @@
 # Collaboration guide
 
-## Branches and ownership
+## Branches and team responsibilities
 
-`main` is the reviewed shared baseline. The project owner works on Agent 1 (Tracks 1/2); the teammate works on Agent 2 (Tracks 3/4, with Track 5 planned). Track numbers and agent numbers are different: Agent 1 Track 2 is proposal review; the teammate's `feature/agent2` contains tender evaluation.
+`main` contains the shared runnable Sprint 2 application. Agent 1 covers Tracks 1/2; Agent 2 covers Tracks 3/4, with Track 5 planned. Track numbers and agent numbers are different: Agent 1 Track 2 is proposal review; `feature/agent2` contains the tender-evaluation contribution. Team responsibilities are listed in the README.
 
-The combined application is prepared on `codex/consolidate-application` from the preserved `integration/sprint2` work and a merge of the teammate branch. Review its PR into `main`. Do not force-push developer branches or overwrite either person's work. Keep the combined `app.py` entrypoint when changing navigation.
+The combined application was prepared on `codex/consolidate-application` from the preserved `integration/sprint2` work and a merge of the teammate branch, then published to `main` through PR #1 at the team's request. Ongoing changes should use feature branches and PRs. Do not force-push developer branches or overwrite either person's work. Keep the combined `app.py` entrypoint when changing navigation.
 
 ## Review and publication
 
@@ -18,16 +18,16 @@ Run combined offline checks and verify a clean package/checkout can exercise bot
 
 ## Getting the whole app
 
-Before the consolidation PR is merged:
+For a fresh installation:
 
 ```powershell
-git fetch origin
-git switch -c review/consolidated-app --track origin/codex/consolidate-application
+git clone https://github.com/Joeyizhen/ManpowerCostAssistant.git
+cd ManpowerCostAssistant
 uv sync --frozen --python 3.14
 uv run streamlit run app.py --server.address 127.0.0.1 --server.port 8511 --browser.gatherUsageStats false
 ```
 
-Use a fresh checkout or commit/checkpoint your own work before switching. Preserve private configuration. After the reviewed PR is merged, teams can clone/update `main` instead.
+For an existing installation, commit/checkpoint your own work before switching to `main`, then update with `git pull --ff-only origin main`. Preserve private configuration. Both activities and the Site Xtown example are included in `main`; there is no need to select a separate agent branch to run the complete app.
 
 A clean clone uses labelled synthetic data; no private workbook/database is needed to open both activities. Optional model credentials are configured privately per installation. See [DEPLOYMENT.md](../DEPLOYMENT.md) for persistence/authentication and data provisioning.
 

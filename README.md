@@ -54,12 +54,12 @@ The application supports officer judgement. Saving a draft, accepting an AI sugg
 
 ## Run the Sprint 2 application
 
-The combined Sprint 2 code is on `codex/consolidate-application` in [PR #1](https://github.com/Joeyizhen/ManpowerCostAssistant/pull/1). Use this branch until it has been reviewed and merged into `main`.
+The combined Sprint 2 application is available on the default **`main`** branch. A normal clone provides the landing page with **Manpower budgeting** and **Tender evaluation**, including the Site Xtown example. The integration history is recorded in [PR #1](https://github.com/Joeyizhen/ManpowerCostAssistant/pull/1).
 
 Python 3.14 is the tested development version. With `uv` installed:
 
 ```powershell
-git clone --branch codex/consolidate-application https://github.com/Joeyizhen/ManpowerCostAssistant.git
+git clone https://github.com/Joeyizhen/ManpowerCostAssistant.git
 cd ManpowerCostAssistant
 uv sync --frozen --python 3.14
 Copy-Item .env.example .env
