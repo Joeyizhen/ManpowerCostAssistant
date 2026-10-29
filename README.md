@@ -54,7 +54,7 @@ The application supports officer judgement. Saving a draft, accepting an AI sugg
 
 ## Run the Sprint 2 application
 
-The combined Sprint 2 application is available on the default **`main`** branch. A normal clone provides the landing page with **Manpower budgeting** and **Tender evaluation**, including the Site Xtown example. The integration history is recorded in [PR #1](https://github.com/Joeyizhen/ManpowerCostAssistant/pull/1).
+The combined Sprint 2 application is available on the default **`main`** branch. A normal clone provides the landing page with **Manpower budgeting** and **Tender evaluation**, including the Site Xtown example.
 
 Python 3.14 is the tested development version. With `uv` installed:
 
@@ -101,8 +101,6 @@ Trusted transfer of a live approved budget between agents remains incomplete. Ge
 
 - [Project write-up and architecture](docs/PROJECT_BRIEF.md)
 - [Setup and deployment](DEPLOYMENT.md)
-- [Combined-agent implementation](docs/SPRINT2_INTEGRATION.md)
-- [Collaboration and branch workflow](docs/COLLABORATION.md)
 - [Reference provisioning and limitations](docs/PREPARED_REFERENCES.md)
 - [Validation results](docs/VALIDATION.md)
 
