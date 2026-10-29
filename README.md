@@ -54,7 +54,7 @@ The application supports officer judgement. Saving a draft, accepting an AI sugg
 
 ## Run the Sprint 2 application
 
-The combined Sprint 2 application is available on the default **`main`** branch. A normal clone provides the landing page with **Manpower budgeting** and **Tender evaluation**, including the Site Xtown example.
+The combined Sprint 2 application is available on the default **`main`** branch. A normal clone provides the landing page with **Manpower budgeting** and **Tender evaluation**. The included Site Xtown example is for **Manpower budgeting only**.
 
 Python 3.14 is the tested development version. With `uv` installed:
 
@@ -68,7 +68,9 @@ uv run streamlit run app.py --server.address 127.0.0.1 --server.port 8511 --brow
 
 Open `http://127.0.0.1:8511/` on the same computer. Both agents run from `app.py`. Preserve an existing private `.env` rather than copying over it. Alternative installation and hosting configuration are covered in [DEPLOYMENT.md](DEPLOYMENT.md).
 
-### Try the Site Xtown example
+### Try the Site Xtown manpower budgeting example
+
+**Site Xtown is a manpower budgeting example for Agent 1, Track 1 only. It does not populate Tender evaluation (Agent 2, Tracks 3 and 4).**
 
 Choose **Manpower budgeting → Build a new budget**, open the sidebar and select **Load Site Xtown example**.
 
