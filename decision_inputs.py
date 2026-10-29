@@ -6,10 +6,11 @@ from activity_nav import retained_key
 from services.decision_basis import basis_errors, record_basis, retained_basis
 from services.journey import working_draft
 from services.manpower_checks import LOCAL_ACTOR
+from services.ui_context import current_plan
 
 
 def keep_basis_draft(prefix, kind):
-    plan = st.session_state.plan
+    plan = current_plan()
     plan.basis_drafts[kind] = {
         key: st.session_state.get(prefix + key)
         for key in ("_roles", "_category", "_explanation", "_classification", "_source")

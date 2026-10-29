@@ -23,6 +23,10 @@ GENERAL_COHORT = {
 
 
 def general_reference(plan, records, role_ids):
+    from services.reference_data import annual_reference, prepared
+
+    if prepared(records):
+        return annual_reference(records, general=True)
     # Fixed reference cohort: deployment titles never expand or narrow the sample.
     eligible = [
         r
@@ -90,7 +94,14 @@ def general_proposal(
         profile = [round(x, 2) / 100 for x in yearly_percent]
         reference_selected = False
     optional_note = reason.strip()
+    entered_source = source.strip()
     selected = [r for r in plan.roles if r.included and r.id in role_ids]
+    from services.cost_routing import recorded_route
+
+    if any(recorded_route(r)["route"] in ("pwm", "unresolved") for r in selected):
+        raise ValueError(
+            "Resolve role routing first; PWM workers cannot receive the general annual increase."
+        )
     if len(selected) != len(set(role_ids)) or any(r.pwm for r in selected):
         raise ValueError("General increase cannot include a role with active PWM salary progression.")
     bm = general_reference(plan, records, role_ids)
@@ -114,6 +125,22 @@ def general_proposal(
     changed = []
     for role in selected:
         prior = retained_basis(plan, role, "escalation")
+        unchanged_profile = role.escalation == profile and role.escalation_mode == "assumption"
+        if (
+            unchanged_profile
+            and prior
+            and optional_note in ("", prior.snapshots[role.id].get("optional_note", ""))
+            and entered_source in ("", prior.source)
+        ):
+            continue  # Reconfirming unchanged values is not a new source or assumption decision.
+        if (
+            unchanged_profile
+            and not prior
+            and "escalation" in plan.confirmations
+            and not entered_source
+            and optional_note in ("", role.escalation_reason)
+        ):
+            continue  # Compatible legacy confirmed assumptions stay recorded as originally explained.
         if (
             role.escalation == profile
             and role.escalation_mode == "assumption"
@@ -123,6 +150,11 @@ def general_proposal(
         ):
             continue
         payload = role.model_dump(mode="json")
+        from services.cost_routing import pin_route
+
+        routed = role.model_copy(deep=True)
+        pin_route(routed, role.future_routing.get("standard_role"))
+        payload["future_routing"] = routed.future_routing
         payload.update(
             escalation=profile, escalation_mode="assumption", schedule_id=None, escalation_reason=reason
         )
@@ -151,7 +183,15 @@ def general_proposal(
             detail["yearly_percent"] = [round(x * 100, 2) for x in profile]
             detail["optional_note"] = optional_note
             detail["applicable_years"] = list(range(2, plan.profile.years + 1))
-            detail["reference_data"] = bm if reference_selected else {"optional_reference": source}
+            if reference_selected and bm.get("reference_kind") == "prepared quotation":
+                # Retain exact IDs/version/statistics once per decision, without copying
+                # thousands of full source rows and pairs into every affected role.
+                detail["reference_data"] = {
+                    k: v for k, v in bm.items() if k not in {"records", "changes", "schedules"}
+                }
+                detail["reference_data"]["role_line_count"] = len(bm["schedules"])
+            else:
+                detail["reference_data"] = bm if reference_selected else {"optional_reference": source}
     candidate.basis_drafts.pop("common_future", None)
     return candidate
 

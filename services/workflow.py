@@ -5,9 +5,12 @@ import json
 from uuid import uuid4
 
 from services.calculations import budget, coverage_quantity
+from services.decision_basis import retained_basis
 from services.evidence import ROLES, load_records, position, rate_benchmark
 from services.manpower_checks import quantity_discrepancy, shared_basis_mismatches
 from services.models import GATES, Finding, Plan, Profile, Responsibility, Role, now
+
+WORKFLOW_VERSION = 2
 
 
 def invalidate(plan: Plan, from_gate: str, reason: str, officer: str):
@@ -32,19 +35,34 @@ def invalidate(plan: Plan, from_gate: str, reason: str, officer: str):
 def apply_change(plan: Plan, kind: str, payload: dict, reason: str, officer: str):
     # Validate before committing; no partial mutation on error.
     candidate = plan.model_copy(deep=True)
-    previous_findings = [f.model_dump() for f in findings(plan, load_records())]
     if kind == "profile":
         candidate.profile = Profile.model_validate({**candidate.profile.model_dump(), **payload})
+        if candidate.profile == plan.profile:
+            return
         gate = "profile"
     elif kind == "responsibility":
         item = Responsibility.model_validate(payload)
+        if any(existing == item for existing in candidate.responsibilities):
+            return
         candidate.responsibilities = [r for r in candidate.responsibilities if r.id != item.id] + [item]
         gate = "responsibilities"
     elif kind == "role":
         item = Role.model_validate(payload)
-        if item.mapped_role and item.mapped_role not in ROLES:
-            raise ValueError("Mapping must use a supported role or remain unmatched")
         old = next((r for r in candidate.roles if r.id == item.id), None)
+        if not old or old.label != item.label:
+            from services.cost_routing import resolve_route
+
+            route = resolve_route(item)
+            if route["route"] != "demonstration":
+                item.future_routing = route
+        if old == item:
+            return
+        if (
+            item.mapped_role
+            and item.mapped_role not in ROLES
+            and not (old and old.mapped_role == item.mapped_role)
+        ):
+            raise ValueError("Mapping must use a supported role or remain unmatched")
         candidate.roles = [r for r in candidate.roles if r.id != item.id] + [item]
         gate = "quantities"
         if old:
@@ -87,6 +105,7 @@ def apply_change(plan: Plan, kind: str, payload: dict, reason: str, officer: str
         for key in list(values):
             if key.startswith(prefix):
                 values.pop(key)
+    previous_findings = [f.model_dump() for f in findings(plan, load_records())]
     invalidate(candidate, gate, reason, officer)
     if candidate.working_notes.get("base_version") == plan.version:
         notes = candidate.working_notes
@@ -164,17 +183,19 @@ def missing_for_gate(plan: Plan, gate: str, records=None):
                 errors.append(f"{r.label}: enter a positive monthly manpower unit rate")
             if (
                 r.included
-                and r.rate_origin == "Synthetic benchmark selection"
+                and r.rate_origin in ("Synthetic benchmark selection", "Prepared reference selection")
+                and not retained_basis(plan, r, "rate")
                 and not rate_benchmark(
                     records if records is not None else load_records(),
                     r.mapped_role,
                     r.benchmark_year,
                     r.benchmark_status,
                     r.benchmark_scope,
+                    quantity_unit=r.quantity_unit,
                 )["available"]
             ):
                 errors.append(
-                    f"{r.label}: no sufficient synthetic comparable rates; use an explicit officer assumption"
+                    f"{r.label}: no sufficient comparable rate support; use an explicit officer assumption"
                 )
     elif gate == "escalation":
         for r in plan.roles:
@@ -187,6 +208,9 @@ def missing_for_gate(plan: Plan, gate: str, records=None):
     elif gate == "rates":
         errors += basis_errors(plan, "rate", records or [])
     elif gate == "escalation":
+        from services.cost_routing import route_errors
+
+        errors += [error for role in plan.roles for error in route_errors(role, enforce_current=True)]
         errors += basis_errors(plan, "escalation", records or []) + basis_errors(
             plan, "policy", records or []
         )
@@ -197,6 +221,8 @@ def requires_decision(finding):
     """Routine qualifications remain disclosed, without role-by-role acknowledgements."""
     routine = {
         "synthetic",
+        "reference_limitations",
+        "rate_range",
         "scenario",
         "unmatched",
         "thin_evidence",
@@ -256,6 +282,12 @@ def confirm(plan: Plan, gate: str, officer: str, records=None):
             ]
     if errors:
         raise ValueError("\n".join(dict.fromkeys(errors)))
+    if gate == "escalation":
+        from services.cost_routing import pin_route
+
+        for role in plan.roles:
+            if role.included:
+                pin_route(role)
     plan.confirmations[gate] = plan.version
     if gate == "final":
         plan.final_officer, plan.final_date = officer, now()
@@ -342,6 +374,10 @@ def findings(plan: Plan, records):
         rid = role.id if role else ""
         fid = f"{code}:{rid}:{year or ''}"
         context = finding_context(plan, code, role, message)
+        from services.reference_data import metadata, prepared
+
+        if prepared(records) and code in ("rate_range", "thin_evidence", "reference_limitations"):
+            context["reference_dataset"] = metadata(records)["dataset_id"]
         fp = hashlib.sha256(json.dumps(context, sort_keys=True).encode()).hexdigest()
         item = Finding(
             id=fid,
@@ -357,16 +393,39 @@ def findings(plan: Plan, records):
         old = plan.decisions.get(fid)
         if old and old.fingerprint == fp and not blocking:
             item = old.model_copy(deep=True)
-        elif code in ["synthetic", "unmatched", "thin_evidence"]:
+        elif code in ["synthetic", "reference_limitations", "unmatched", "thin_evidence"]:
             item.status = "data limitation"
+        if code == "unusual_escalation" and role is not None and not item.officer:
+            basis = retained_basis(plan, role, "escalation")
+            if basis:
+                from services.decision_basis import meaningful
+
+                rationale = basis.snapshots[role.id].get("optional_note") or role.escalation_reason
+                if meaningful(rationale) and not rationale.startswith(
+                    ("Officer-entered annual", "Officer-entered yearly", "Officer selected constant")
+                ):
+                    item.status = "accepted exception"
+                    item.justification = rationale
+                    item.officer = basis.officer
+                    item.timestamp = basis.recorded_at
         result.append(item)
 
-    add(
-        "synthetic",
-        "All retrieved tender evidence is synthetic.",
-        "Budget is for testing; rates and increases do not establish market prices.",
-        evidence="data/sample/historical.json",
-    )
+    from services.reference_data import LIMITATIONS, metadata, prepared
+
+    if prepared(records):
+        add(
+            "reference_limitations",
+            "Prepared source quotations are conditional references.",
+            LIMITATIONS,
+            evidence="Prepared reference snapshot " + metadata(records)["dataset_id"],
+        )
+    else:
+        add(
+            "synthetic",
+            "All retrieved tender evidence is synthetic.",
+            "Budget is for testing; rates and increases do not establish market prices.",
+            evidence="data/sample/historical.json",
+        )
     for key in ["assets", "locations", "operating_hours", "response_requirements", "critical_functions"]:
         value = getattr(plan.profile, key)
         if value and "unknown" in value.casefold():
@@ -543,7 +602,14 @@ def findings(plan: Plan, records):
                     )
             except ValueError as e:
                 add("coverage_math", f"{r.label}: {e}", "Invalid quantity arithmetic.", r, True)
-        bm = rate_benchmark(records, r.mapped_role, r.benchmark_year, r.benchmark_status, r.benchmark_scope)
+        bm = rate_benchmark(
+            records,
+            r.mapped_role,
+            r.benchmark_year,
+            r.benchmark_status,
+            r.benchmark_scope,
+            quantity_unit=r.quantity_unit,
+        )
         if not bm["available"]:
             add(
                 "thin_evidence",

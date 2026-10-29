@@ -17,13 +17,16 @@ def text(value):
     return value
 
 
-def export_excel(plan, records):
+def export_excel(plan, records, extra_sheets=None):
     result = budget(plan, records)  # Invalid inputs never produce a misleading numeric workbook.
     output = BytesIO()
     wb = xlsxwriter.Workbook(
         output, {"in_memory": True, "strings_to_formulas": False, "strings_to_urls": False}
     )
-    wb.set_properties({"title": "FM Manpower Budget", "comments": LABEL})
+    from services.reference_data import LIMITATIONS, prepared
+
+    source_label = ("Prepared source quotations. " + LIMITATIONS) if prepared(records) else LABEL
+    wb.set_properties({"title": "FM Manpower Budget", "comments": source_label})
     wb.set_calc_mode("auto")
     title = wb.add_format({"bold": True, "font_size": 18, "font_color": "#172B42"})
     header = wb.add_format({"bold": True, "font_color": "white", "bg_color": "#147D74", "text_wrap": True})
@@ -33,7 +36,7 @@ def export_excel(plan, records):
     input_fmt = wb.add_format({"font_color": "#1551A5", "text_wrap": True, "valign": "top"})
     sheets = {}
 
-    def sheet(name, columns, subtitle=LABEL):
+    def sheet(name, columns, subtitle=source_label):
         ws = wb.add_worksheet(name)
         sheets[name] = ws
         ws.hide_gridlines(2)
@@ -410,7 +413,14 @@ def export_excel(plan, records):
         manpower.set_row(i, 85)
         if not r.included:
             continue
-        bm = rate_benchmark(records, r.mapped_role, r.benchmark_year, r.benchmark_status, r.benchmark_scope)
+        bm = rate_benchmark(
+            records,
+            r.mapped_role,
+            r.benchmark_year,
+            r.benchmark_status,
+            r.benchmark_scope,
+            quantity_unit=r.quantity_unit,
+        )
         rates_ws.write_row(
             i,
             0,
@@ -436,7 +446,7 @@ def export_excel(plan, records):
                 bm["maximum"],
                 text(bm["pricing_years"]),
                 ", ".join(x["record_id"] for x in bm["records"]),
-                "Inclusive monthly per head; component split unavailable",
+                bm.get("source_unit", "Inclusive monthly per head; component split unavailable"),
                 bm["limitations"],
             ],
         )
@@ -493,16 +503,18 @@ def export_excel(plan, records):
 
     movements = trace_rows(plan, records)
     future_records = {}
+    from services.reference_data import recorded_reference_rows
+
     for basis in plan.decision_bases:
         for detail in basis.snapshots.values():
-            for row in detail.get("reference_data", {}).get("records", []):
+            for row in recorded_reference_rows(detail.get("reference_data", {})):
                 future_records[row["record_id"]] = row
     if future_records:
         fields = list(next(iter(future_records.values())))
         future_ws = sheet(
             "Future reference records",
             fields,
-            "Retained reference snapshots supporting shared annual increases; synthetic demonstration evidence, not market rates.",
+            "Recorded reference cohorts supporting annual increases; origins and qualifications retained, not verified market rates.",
         )
         for ix, row in enumerate(future_records.values(), 4):
             future_ws.write_row(ix, 0, [text(row.get(field)) for field in fields])
@@ -580,7 +592,15 @@ def export_excel(plan, records):
                 r["currency"],
                 r["validation_status"],
                 r["data_origin"],
-                "Synthetic; causes unknown; no salary or experience breakdown",
+                (
+                    LIMITATIONS
+                    + " Rate origin: "
+                    + r.get("rate_origin", "Unknown")
+                    + "; "
+                    + r.get("issue_flags", "")
+                )
+                if r.get("reference_kind") == "prepared quotation"
+                else "Synthetic; causes unknown; no salary or experience breakdown",
             ],
         )
         sources.set_row(i, 56)
@@ -608,5 +628,21 @@ def export_excel(plan, records):
         )
     for ws in sheets.values():
         ws.autofilter(3, 0, max(4, ws.dim_rowmax), ws.dim_colmax)
+    for name, rows in (extra_sheets or {}).items():
+        keys = list(rows[0]) if rows else ["Information"]
+        ws = wb.add_worksheet(name)
+        ws.set_column(0, max(0, len(keys) - 1), 26, wrap)
+        ws.freeze_panes(1, 1)
+        ws.write_row(0, 0, keys, header)
+        for i, row in enumerate(rows, 1):
+            for j, key in enumerate(keys):
+                value = row.get(key)
+                if value is None:
+                    ws.write_blank(i, j, None)
+                elif isinstance(value, (int, float)) and not isinstance(value, bool):
+                    ws.write_number(i, j, value, money)
+                else:
+                    ws.write_string(i, j, str(text(value)), wrap)
+            ws.set_row(i, 60)
     wb.close()
     return output.getvalue()

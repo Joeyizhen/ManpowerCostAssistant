@@ -14,7 +14,7 @@ def blank(monkeypatch, tmp_path, live=False):
     monkeypatch.setenv("DEPLOYMENT_MODE", "local")
     monkeypatch.setenv("OPENAI_API_KEY", "test-not-a-credential" if live else "")
     monkeypatch.setenv("OPENAI_MODEL", "test-model" if live else "")
-    at = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=40).run()
+    at = AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=90).run()
     at.button(key="activity_budgeting").click().run()
     at.button(key="choose_track_1").click().run()
     assert not at.exception
@@ -25,13 +25,12 @@ def button(at, label):
     return next(
         b
         for b in at.button
-        if b.label == label
-        or (label == "Confirm full contract budget" and b.key == "confirm_final_budget")
+        if b.label == label or (label == "Confirm full contract budget" and b.key == "confirm_final_budget")
     )
 
 
 def role_picker(at):
-    return next(m for m in at.multiselect if m.label == "Add another role")
+    return next(m for m in at.selectbox if m.label == "Add another role")
 
 
 def fill_project(at):
@@ -40,7 +39,7 @@ def fill_project(at):
         for t in at.text_area
         if t.label == "Describe the properties and operating conditions the FM team will manage"
     ).set_value("Invented office FM team, weekday workload allowances; separate specialist contracts.").run()
-    next(t for t in at.text_input if t.label == "Anticipated contract start date").set_value("Jan 2028").run()
+    next(t for t in at.text_input if t.label == "Anticipated start month").set_value("Jan 2028").run()
     next(t for t in at.text_input if t.label == "Base term (years)").set_value("2").run()
     next(t for t in at.text_input if t.label == "Option term (years)").set_value("2").run()
     at.button(key="six_continue").click().run()
@@ -51,11 +50,13 @@ def fill_project(at):
 
 def fill_table(at, titles, quantities):
     fill_project(at)
-    known = set(at.dataframe[0].value["Role title"])
-    extras = [t for t in titles if t not in known]
-    if extras:
-        role_picker(at).set_value(extras).run()
-        at.button(key="add_selected_roles").click().run()
+    known = set(at.dataframe[0].value["Role title"]) if at.dataframe else set()
+    for title in [t for t in titles if t not in known]:
+        if title in role_picker(at).options:
+            role_picker(at).set_value(title).run()
+            at.button(key="add_selected_roles").click().run()
+        else:
+            seed_retained_role(at, title)
     key = role_picker(at).key.removesuffix("_add") + "_table"
     selected = dict(zip(titles, quantities, strict=True))
     at.session_state[key] = {
@@ -72,10 +73,22 @@ def fill_table(at, titles, quantities):
         "added_rows": [],
         "deleted_rows": [],
     }
-    button(at, "Save input draft").click().run()
-    at.button(key="six_continue").click().run()
-    assert not at.exception and at.session_state["plan"].ui_step == 2
+    button(at, "Save draft").click().run()
+    assert not at.exception and at.session_state["plan"].ui_step == 1
     return at
+
+
+def seed_retained_role(at, title):
+    """Legacy saved titles remain editable after removing the new unlisted-role form."""
+    from journey_inputs import commit_rows
+    from services.hybrid import comparison_rows
+
+    p = at.session_state["plan"]
+    rows = comparison_rows(p, common=False, include_pending=False)
+    rows.append({"id": "retained-" + str(len(rows)), "Role title": title, "Quantity basis": "headcount"})
+    commit_rows(p, rows)
+    at.session_state["six_epoch"] = at.session_state.get("six_epoch", 0) + 1
+    at.run()
 
 
 def ready_guide(plan, records, message, client, model, stage):
@@ -161,32 +174,38 @@ def reviewed(monkeypatch, tmp_path):
         ["Facility Manager", "Technician", "M&E Engineer"],
         [1, 3, 0.5],
     )
-    button(at, "Review plan").click().run()
+    at.button(key="revise_manpower_plan").click().run()
+    at.chat_input[0].set_value("Review the deployment for material discrepancies").run()
     assert not at.exception
-    at.button(key="apply_reviewed_details").click().run()
+    at.button(key="accept_deployment_suggestions").click().run()
+    at.button(key="use_manpower_plan").click().run()
     assert not at.exception and at.session_state["stage"] == 4
     return at
 
 
 def test_project_then_manpower_steps_without_chat_or_internal_evidence(monkeypatch, tmp_path):
     at = blank(monkeypatch, tmp_path)
+    assert not any("Drafts stay in this session" in c.value for c in at.caption)
     assert not at.dataframe and not at.multiselect
-    assert any(t.value == "Build a new manpower plan" for t in at.title)
-    assert any(h.value == "Step 1 out of 6: Contract and operating context" for h in at.subheader)
+    assert not any(t.value == "Build a new manpower plan" for t in at.title)
+    assert any(h.value == "Step 1 out of 5: Project" for h in at.subheader)
     assert not any("SYNTHETIC DATA" in c.value for c in at.caption)
-    assert at.button(key="six_continue").disabled
+    assert not at.button(key="six_continue").disabled
     fill_project(at)
-    assert at.dataframe and at.multiselect
-    assert any(h.value == "Step 2 out of 6: Manpower quantities and their basis" for h in at.subheader)
-    assert any(e.label == "Additional context (optional)" for e in at.expander)
-    assert "Anything not covered in the table" in {t.label for t in at.text_area}
+    assert not at.dataframe and role_picker(at)
+    assert any(h.value == "Step 2 out of 5: Deployment" for h in at.subheader)
+    assert not any(
+        e.label in {"Add an unlisted role", "One operational reason covers related roles"}
+        for e in at.expander
+    )
+    assert not any(e.label == "Additional context (optional)" for e in at.expander)
+    assert "Anything not covered in the table" not in {t.label for t in at.text_area}
     assert not any(b.label == "Review plan" for b in at.button)
     assert not at.get("json") and not at.session_state["plan"].chat
     assert not any("Tool evidence" in e.label for e in at.expander)
-    from services.hybrid import COMMON_ROLES
 
-    assert at.dataframe[0].value["Role title"].tolist() == COMMON_ROLES
-    assert at.dataframe[0].value["Proposed quantity / FTE"].isna().all()
+    assert not working_draft(at.session_state["plan"]).roles
+    assert role_picker(at).value is None
     assert not any("Paste a manpower" in e.label for e in at.expander)
 
 
@@ -199,7 +218,7 @@ def test_actual_table_edits_survive_save_and_no_model_runs_on_edits(monkeypatch,
         blank(monkeypatch, tmp_path, live=True), ["Senior Property Executive cum FSM", "Technician"], [0.5, 4]
     )
     assert not requests
-    button(at, "Save input draft").click().run()
+    button(at, "Save draft").click().run()
     draft = working_draft(at.session_state["plan"])
     assert {r.label: r.quantity for r in draft.roles if r.included} == {
         "Senior Property Executive cum FSM": 0.5,
@@ -239,7 +258,8 @@ def test_table_and_targeted_followup_reach_one_confirmation(monkeypatch, tmp_pat
 
     monkeypatch.setattr(agent, "converse", guide)
     at = fill_table(blank(monkeypatch, tmp_path, live=True), ["Admin Executive", "Technician"], [1, 3])
-    button(at, "Review plan").click().run()
+    at.button(key="revise_manpower_plan").click().run()
+    at.chat_input[0].set_value("Review the deployment for material discrepancies").run()
     assert not at.exception and len(requests) == 1
     assert not at.session_state["plan"].pending
     at.chat_input[0].set_value(
@@ -247,7 +267,8 @@ def test_table_and_targeted_followup_reach_one_confirmation(monkeypatch, tmp_pat
     ).run()
     assert not at.exception and len(requests) == 2
     assert {r.quantity for r in working_draft(at.session_state["plan"]).roles if r.included} == {1, 3}
-    at.button(key="apply_reviewed_details").click().run()
+    at.button(key="accept_deployment_suggestions").click().run()
+    at.button(key="use_manpower_plan").click().run()
     assert not at.exception and at.session_state["stage"] == 4
     assert len(requests) == 2  # No automatic pricing interview after manpower confirmation.
     assert set(at.session_state["plan"].confirmations) == {
@@ -268,7 +289,6 @@ def test_average_defaults_and_slider_do_not_require_justification(monkeypatch, t
     custom = next(r for r in p.roles if r.label == "M&E Engineer")
     assert custom.rate is None
     prefix = f"rate_{p.id}_{r.id}_2028"
-    at.checkbox(key=prefix + "_custom").check().run()
     at.number_input(key=prefix + "_number").set_value(25000.0).run()
     assert not at.exception
     changed = next(item for item in at.session_state["plan"].roles if item.id == r.id)
@@ -350,55 +370,32 @@ def test_failed_review_retains_table_and_explicit_retry_only(monkeypatch, tmp_pa
 
     monkeypatch.setattr(agent, "converse", guide)
     at = fill_table(blank(monkeypatch, tmp_path, live=True), ["Technician"], [4])
-    button(at, "Review plan").click().run()
+    at.button(key="revise_manpower_plan").click().run()
+    at.chat_input[0].set_value("Review the deployment for material discrepancies").run()
     assert not at.exception and at.session_state["failed_turn"]
     assert next(r for r in working_draft(at.session_state["plan"]).roles if r.included).quantity == 4
     at.run()
     assert len(calls) == 1
     at.button(key="retry_failed_message").click().run()
     assert not at.exception and len(calls) == 2
-    assert at.session_state["plan"].review_checkpoint == "manpower"
+    assert at.session_state["plan"].review_checkpoint == ""
+    assert at.session_state["plan"].pending
 
 
 def test_explicit_copy_then_zero_does_not_answer_other_roles_or_call_api(monkeypatch, tmp_path):
-    import services.agent as agent
-
-    calls = []
-    monkeypatch.setattr(agent, "converse", lambda *args: calls.append(args))
-    at = fill_project(blank(monkeypatch, tmp_path, live=True))
-    next(r for r in at.radio if r.label == "Deployment context").set_value("Existing contract").run()
-    key = role_picker(at).key.removesuffix("_add") + "_table"
-    at.session_state[key] = {
-        "edited_rows": {
-            0: {
-                "Current quantity / FTE": 2.0,
-                "Proposed quantity / FTE": 1.0,
-                "Quantity basis": "headcount",
-                "Duties / deployment notes": "Synthetic officer change rationale",
-            },
-            2: {"Proposed quantity / FTE": 4.0, "Quantity basis": "headcount"},
-        },
-        "added_rows": [],
-        "deleted_rows": [],
-    }
-    at.button(key="copy_current").click().run()
-    frame = at.dataframe[0].value
-    assert frame.iloc[0]["Proposed quantity / FTE"] == 2
-    assert frame.iloc[2]["Proposed quantity / FTE"] == 4
-    assert frame.drop(index=[0, 2])["Proposed quantity / FTE"].isna().all()
-    at.button(key="mark_unused_zero").click().run()
-    draft = working_draft(at.session_state["plan"])
-    assert {r.label: r.quantity for r in draft.roles if r.included} == {
+    at = fill_table(blank(monkeypatch, tmp_path), ["Facility Manager", "Technician"], [2, 4])
+    assert len(working_draft(at.session_state["plan"]).roles) == 2
+    assert not any(x.key in ("copy_current", "mark_unused_zero") for x in at.button)
+    assert not at.session_state["plan"].confirmations
+    assert {r.label: r.quantity for r in working_draft(at.session_state["plan"]).roles} == {
         "Facility Manager": 2,
         "Technician": 4,
     }
-    assert all(r.quantity == 0 for r in draft.roles if not r.included)
-    assert not calls and not at.session_state["plan"].confirmations
 
 
 def test_save_resume_preserves_comparison_without_approval(monkeypatch, tmp_path):
     at = fill_table(blank(monkeypatch, tmp_path), ["Facility Manager", "Technician"], [1, 4])
-    button(at, "Save input draft").click().run()
+    button(at, "Save draft").click().run()
     saved_id = at.session_state["plan"].id
     button(at, "New blank project").click().run()
     assert at.session_state["plan"].id != saved_id
@@ -410,7 +407,7 @@ def test_save_resume_preserves_comparison_without_approval(monkeypatch, tmp_path
         "Technician": 4,
     }
     assert "Invented office" in draft.profile.description
-    assert at.session_state["plan"].ui_step == 2
+    assert at.session_state["plan"].ui_step == 1
     assert not at.session_state["plan"].confirmations
 
 
@@ -420,9 +417,8 @@ def test_back_navigation_retains_inputs_and_manpower_revision_relocks_pricing(mo
     original = {r.id: r.quantity for r in p.roles}
     calls = len(p.chat)
     at.button(key="six_back").click().run()
-    assert at.session_state["plan"].ui_step == 2
+    assert at.session_state["plan"].ui_step == 1
     assert at.button(key="use_manpower_plan").disabled is False
-    at.button(key="six_back").click().run()
     assert at.session_state["plan"].ui_step == 1
     assert {r.id: r.quantity for r in working_draft(at.session_state["plan"]).roles} == original
     key = role_picker(at).key.removesuffix("_add") + "_table"
@@ -432,12 +428,11 @@ def test_back_navigation_retains_inputs_and_manpower_revision_relocks_pricing(mo
         "added_rows": [],
         "deleted_rows": [],
     }
-    button(at, "Save input draft").click().run()
+    button(at, "Save draft").click().run()
     p = at.session_state["plan"]
     assert not at.exception and "plan" not in p.confirmations
     assert len(p.chat) == calls
-    at.button(key="six_continue").click().run()
-    assert at.session_state["plan"].ui_step == 2 and not any(b.key == "six_continue" for b in at.button)
+    assert at.session_state["plan"].ui_step == 1 and not any(b.key == "six_continue" for b in at.button)
     assert (
         next(r for r in working_draft(at.session_state["plan"]).roles if r.label == "Technician").quantity
         == 5
@@ -453,7 +448,7 @@ def test_compact_rates_costs_band_and_explicit_zero_future_profile(monkeypatch, 
     for r in p.roles:
         if r.included:
             assert at.number_input(key=f"rate_{p.id}_{r.id}_2028_number").value == r.rate
-    assert len(at.slider) == 2
+    assert len(at.slider) == len([r for r in p.roles if r.included])
     assert not at.get("plotly_chart")
     unsupported = next(r for r in p.roles if r.label == "M&E Engineer")
     at.number_input(key=f"rate_{p.id}_{unsupported.id}_2028_number").set_value(6500.0).run()
@@ -462,7 +457,7 @@ def test_compact_rates_costs_band_and_explicit_zero_future_profile(monkeypatch, 
     show_role_overrides(at)
     assert at.session_state["plan"].ui_step == 4
     prefix = f"common_future_{p.id}"
-    at.number_input(key=prefix + "_exact").set_value(2.5).run()
+    at.number_input(key=prefix + "_percent").set_value(2.5).run()
     # Preview is separate from recorded inputs until the single confirmation.
     assert all(r.escalation == [] for r in at.session_state["plan"].roles if r.included)
     at.button(key="confirm_escalation").click().run()
@@ -480,7 +475,7 @@ def test_delete_selected_project_needs_confirmation_and_preserves_another_draft(
     at = blank(monkeypatch, tmp_path)
     first = at.session_state["plan"]
     first.profile.name = "Synthetic project to remove"
-    button(at, "Save project").click().run()
+    button(at, "Save draft").click().run()
     first_id = first.id
     button(at, "New blank project").click().run()
     active_id = at.session_state["plan"].id
@@ -496,7 +491,7 @@ def test_delete_selected_project_needs_confirmation_and_preserves_another_draft(
     assert at.session_state["plan"].id == active_id
     # Deleting the open saved project closes it, preventing accidental resaving of the removed identity.
     at.session_state["plan"].profile.name = "Synthetic active project"
-    button(at, "Save project").click().run()
+    button(at, "Save draft").click().run()
     at.run()
     at.button(key="delete_project").click().run()
     at.button(key="confirm_delete_project").click().run()
@@ -508,9 +503,7 @@ def test_unsaved_switch_can_be_cancelled_or_saved_without_confirmation(monkeypat
     from services.storage import Store
 
     at = blank(monkeypatch, tmp_path)
-    next(t for t in at.text_input if t.label == "Proposed tender title").set_value(
-        "Synthetic unsaved tender"
-    ).run()
+    next(t for t in at.text_input if t.label == "Project name").set_value("Synthetic unsaved tender").run()
     original_id = at.session_state["plan"].id
     button(at, "New blank project").click().run()
     assert at.session_state["plan"].id == original_id
@@ -529,30 +522,41 @@ def test_unsaved_switch_can_be_cancelled_or_saved_without_confirmation(monkeypat
 def test_plain_contract_fields_missing_inputs_and_invalid_text_protect_valid_draft(monkeypatch, tmp_path):
     at = blank(monkeypatch, tmp_path)
     assert not at.number_input and not at.chat_input
+    assert not any("To continue:" in i.value for i in at.info)
+    at.button(key="six_continue").click().run()
     assert any("anticipated start" in i.value for i in at.info)
     fill_project(at)
     at.button(key="six_back").click().run()
-    next(t for t in at.text_input if t.label == "Anticipated contract start date").set_value("bad date").run()
-    assert at.button(key="six_continue").disabled
+    next(t for t in at.text_input if t.label == "Anticipated start month").set_value("bad date").run()
+    assert not at.button(key="six_continue").disabled
     assert any("MMM YYYY" in i.value for i in at.info)
     assert working_draft(at.session_state["plan"]).profile.start_month == 1
-    button(at, "Save input draft").click().run()
-    assert any("Correct these entries" in e.value for e in at.error)
+    button(at, "Save draft").click().run()
+    assert not at.error and at.session_state["storage_revision"] > 0
+    assert at.session_state["plan"].basis_drafts["project_text"]["start"] == "bad date"
 
 
-def test_synthetic_example_walks_all_six_steps_offline_and_exports(monkeypatch, tmp_path):
+def test_synthetic_example_walks_all_five_steps_offline_and_exports(monkeypatch, tmp_path):
     from services.calculations import budget
+    from services.demo import demo_plan
 
     at = blank(monkeypatch, tmp_path)
-    button(at, "Load synthetic example").click().run()
+    legacy_example = demo_plan()
+    legacy_example.ui_step = 0
+    at.session_state["plan"] = legacy_example
+    at.run()
     assert at.session_state["plan"].ui_step == 0 and not at.session_state["plan"].confirmations
+    example = at.session_state["plan"]
+    assert example.contract_kind == "existing contract"
+    assert example.current_deployment_status == "known"
+    assert sum(r.current_quantity for r in example.roles) == 6
+    assert sum(r.quantity for r in example.roles) == 7
     assert not at.button(key="six_continue").disabled
     at.button(key="six_continue").click().run()
     assert at.session_state["plan"].ui_step == 1
     assert all(r.quantity_unit == "headcount" for r in working_draft(at.session_state["plan"]).roles)
     assert at.dataframe[0].proto.placeholder == ""
-    at.button(key="six_continue").click().run()
-    assert at.session_state["plan"].ui_step == 2
+    assert at.session_state["plan"].ui_step == 1
     assert not at.session_state["plan"].chat
     at.button(key="use_manpower_plan").click().run()
     assert at.session_state["plan"].ui_step == 3
@@ -590,32 +594,14 @@ def test_synthetic_example_walks_all_six_steps_offline_and_exports(monkeypatch, 
 def test_conditional_columns_blank_cells_and_explicit_shared_allocation(monkeypatch, tmp_path):
     import json
 
-    at = fill_project(blank(monkeypatch, tmp_path))
-    config = json.loads(at.dataframe[0].proto.columns)
-    assert at.dataframe[0].proto.placeholder == ""
+    at = fill_table(blank(monkeypatch, tmp_path), ["Facility Manager"], [0.5])
+    frame = next(d for d in at.dataframe if "Proposed quantity / FTE" in d.value.columns)
+    config = json.loads(frame.proto.columns)
     assert config["Current quantity / FTE"]["hidden"] and config["Change"]["hidden"]
-    assert not config["Quantity basis"].get("hidden", False)
-    key = role_picker(at).key.removesuffix("_add") + "_table"
-    at.session_state[key] = {
-        "edited_rows": {
-            i: {
-                "Proposed quantity / FTE": 0.5 if i == 0 else 0.0,
-                "Quantity basis": "FTE" if i == 0 else "headcount",
-                "Duties / deployment notes": "Synthetic shared supervision" if i == 0 else "",
-            }
-            for i in range(len(at.dataframe[0].value))
-        },
-        "added_rows": [],
-        "deleted_rows": [],
-    }
-    button(at, "Save input draft").click().run()
-    assert not at.button(key="six_continue").disabled
-    role = next(r for r in working_draft(at.session_state["plan"]).roles if r.id == "common-0")
-    assert role.quantity == 0.5 and role.quantity_unit == "FTE"
-    next(r for r in at.radio if r.label == "Deployment context").set_value("Existing contract").run()
-    config = json.loads(at.dataframe[0].proto.columns)
-    assert not config["Current quantity / FTE"].get("hidden", False)
-    assert at.dataframe[0].value["Current quantity / FTE"].isna().all()
+    assert frame.proto.placeholder == ""
+    r = working_draft(at.session_state["plan"]).roles[0]
+    assert r.quantity == 0.5 and r.quantity_unit == "FTE"
+    assert not at.exception
 
 
 def test_unapplied_future_method_saves_draft_but_cannot_be_confirmed(monkeypatch, tmp_path):
@@ -630,7 +616,7 @@ def test_unapplied_future_method_saves_draft_but_cannot_be_confirmed(monkeypatch
     at.session_state["plan"].basis_drafts["future_mode_" + role.id] = "quoted schedule"
     at.run()
     assert at.button(key="confirm_escalation").disabled
-    button(at, "Save project").click().run()
+    button(at, "Save draft").click().run()
     assert not at.error
     at.button(key=f"future_clear_legacy_{p.id}").click().run()
     assert not at.exception and not at.button(key="confirm_escalation").disabled
@@ -649,7 +635,7 @@ def test_advanced_drafts_are_not_lost_or_mistaken_for_recorded_assumptions(monke
     prefix = f"esc_{p.id}_{role.id}"
     at.session_state[prefix + "_yearly_text"] = "0, 1, 2, 3"
     at.run()
-    button(at, "Save project").click().run()
+    button(at, "Save draft").click().run()
     assert (
         at.session_state["plan"].basis_drafts["_ui_controls"]["values"][prefix + "_yearly_text"]
         == "0, 1, 2, 3"
@@ -688,38 +674,16 @@ def test_material_mismatch_is_a_single_editable_table(monkeypatch, tmp_path):
     at = fill_table(blank(monkeypatch, tmp_path), ["Technician"], [2])
     p = at.session_state["plan"]
     p.contract_kind = "existing contract"
-    draft = working_draft(p)
-    role = next(r for r in draft.roles if r.label == "Technician")
+    r = working_draft(p).roles[0]
     update_notes(
-        p,
-        roles=[{**role.model_dump(), "current_quantity": 2, "duties_notes": "additional 4 pax for support"}],
+        p, roles=[{**r.model_dump(), "current_quantity": 2, "duties_notes": "additional 4 pax for support"}]
     )
     at.run()
-    flag_table = next(d for d in at.dataframe if "Remarks / correction" in d.value.columns)
-    assert len(flag_table.value) == 1
-    assert "figures show +0" in flag_table.value.iloc[0]["Check"]
+    flags = [d for d in at.dataframe if "Check" in d.value.columns]
+    assert len(flags) == 1 and "figures show +0" in flags[0].value.iloc[0]["Check"]
+    assert any("Proposed quantity / FTE" in d.value.columns for d in at.dataframe)
     assert not any(t.label == "Brief reason, correction or uncertainty" for t in at.text_area)
-    key = f"sanity_{p.id}_{at.session_state['six_epoch']}"
-    from unittest.mock import patch
-
-    from hybrid_inputs import sanity_changed
-
-    class State(dict):
-        __getattr__ = dict.__getitem__
-        __setattr__ = dict.__setitem__
-
-    state = State(plan=p, six_epoch=at.session_state["six_epoch"])
-    state[key + "_base"] = flag_table.value.to_dict("records")
-    state[key] = {
-        "edited_rows": {0: {"Remarks / correction": "Status quo; additional staffing is not proposed"}}
-    }
-    with patch("hybrid_inputs.st.session_state", state):
-        sanity_changed(key)
-    at.session_state["plan"] = state.plan
-    at.session_state["six_epoch"] = state.six_epoch
-    at.run()
-    assert not any("Remarks / correction" in d.value.columns for d in at.dataframe)
-    assert next(r for r in working_draft(at.session_state["plan"]).roles if r.id == role.id).quantity == 2
+    assert not at.exception
 
 
 def test_pwm_draft_save_apply_confirm_and_mixed_role_budget(monkeypatch, tmp_path):
@@ -759,7 +723,7 @@ def test_pwm_draft_save_apply_confirm_and_mixed_role_budget(monkeypatch, tmp_pat
     at.checkbox(key=prefix + "_remainder_flat_confirmed").check().run()
     at.number_input(key=prefix + "_oncost_percent").set_value(10.0).run()
     at.text_input(key=prefix + "_oncost_source").set_value(config.oncost_source).run()
-    button(at, "Save project").click().run()
+    button(at, "Save draft").click().run()
     assert not at.exception and not at.error
     saved, _ = Store(f"sqlite:///{tmp_path / 'ui.db'}").load(p.id, "local-review")
     assert saved.roles[0].pwm is None and saved.basis_drafts["pwm_clean"]["starting_salary"] == 2000

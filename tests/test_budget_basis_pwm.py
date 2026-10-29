@@ -210,6 +210,8 @@ def test_incomplete_basis_draft_saves_without_approving_or_claiming_verified_evi
 
 def test_basis_gaps_are_distinct_from_invalid_calculation_findings():
     p = demo_plan()
+    # An added role needs an operational basis; unchanged existing staffing does not.
+    p.roles[0].current_quantity = 0
     p.roles[0].quantity_reason = ""
     p.roles[0].duties_notes = "Need more manpower"
     fs = findings(p, load_records())

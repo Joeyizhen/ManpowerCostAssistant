@@ -64,7 +64,8 @@ def test_month_only_costing_and_export_never_claim_an_exact_date():
 
 
 def test_role_picker_filters_added_titles_and_supported_aliases_without_merging_seniority():
-    p = Plan()
+    from services.models import Role
+    p = Plan(roles=[Role(id="fm",label="Facility Manager"), Role(id="tech",label="Technician")])
     choices = role_options(p, "Browse all roles")
     assert "Facility Manager" not in choices and "Facilities Manager" not in choices
     assert "Technician" not in choices
@@ -87,7 +88,7 @@ def test_changed_current_quantity_needs_a_reason_and_fractional_basis_is_explici
     rows[0]["Duties / deployment notes"] = "Synthetic shared supervision reduces this role"
     rows[0]["Proposed quantity / FTE"] = 0.5
     save_input_table(p, "Synthetic office description", 2028, 3, 3, rows)
-    with pytest.raises(ValueError, match="fractional allocation"):
+    with pytest.raises(ValueError, match="whole number of people"):
         validate_manpower(p)
     rows[0]["Quantity basis"] = "FTE"
     save_input_table(p, "Synthetic office description", 2028, 3, 3, rows)

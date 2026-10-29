@@ -67,6 +67,10 @@ def budget(plan: Plan, records: list[dict], scenario_delta=0):
     for role in plan.roles:
         if not role.included:
             continue
+        from services.cost_routing import route_errors
+
+        if errors := route_errors(role):
+            raise ValueError("; ".join(errors))
         if role.quantity is None or role.quantity <= 0 or role.rate is None:
             raise ValueError(f"{role.label}: positive quantity and rate are required")
         if role.quantity_unit == "posts":
@@ -114,7 +118,9 @@ def budget(plan: Plan, records: list[dict], scenario_delta=0):
             start = anniversary(p.costing_start, year - 1)
             end = anniversary(p.costing_start, year)
             quantity = D(role.yearly_quantities[year - 1] if role.yearly_quantities else role.quantity)
-            change = role.escalation[year - 1] + (scenario_delta if year > 1 and quotes is None and not role.pwm else 0)
+            change = role.escalation[year - 1] + (
+                scenario_delta if year > 1 and quotes is None and not role.pwm else 0
+            )
             if not -0.5 <= change <= 1:
                 raise ValueError("Scenario escalation exceeds permitted numeric bounds")
             monthly = (
@@ -168,7 +174,11 @@ def budget(plan: Plan, records: list[dict], scenario_delta=0):
                     "excess_over_baseline": cents(D(annual) - D(flat)),
                     "source_record": quotes[year - 1]["record_id"]
                     if quotes
-                    else ("Official schedule salary-ratio budgeting method; see PWM monthly trace" if role.pwm else "Officer-confirmed escalation assumption"),
+                    else (
+                        "Official schedule salary-ratio budgeting method; see PWM monthly trace"
+                        if role.pwm
+                        else "Officer-confirmed escalation assumption"
+                    ),
                 }
             )
             previous_rate = monthly

@@ -166,7 +166,7 @@ def budget_details(plan, records):
         )
 
 
-FINAL_REVIEW_UI_VERSION = 14
+FINAL_REVIEW_UI_VERSION = 20
 
 
 def results_style():
@@ -187,117 +187,136 @@ def go_to_step(plan, step):
 
 
 def annual_review(plan, result):
-    from services.final_review import annual_breakdown, flat_cost_explanation
+    from services.final_review import annual_breakdown, headcount_comparison
 
-    rows, changes = annual_breakdown(plan, result)
-    starting = "Starting-rate manpower cost"
+    rows, movements = annual_breakdown(plan, result)
+    comparison = headcount_comparison(plan, result)
+    baseline = "Starting-rate manpower cost"
     general = "Compounded annual manpower increase"
-    pwm = "PWM increase"
-    styles = {
-        starting: ("#B6C5CE", "Starting-rate cost"),
-        general: ("#147D74", "Annual increase (accumulated)"),
-        pwm: ("#8164B7", "PWM increase"),
-        "Other adjustments": ("#B77625", "Other adjustments"),
-    }
-    fields = [starting]
+    if comparison["available"]:
+        baseline = "Current headcount at starting rates"
+        general = "General annual increase"
+        rows = [
+            {**item, **{k: v for k, v in old.items() if k.startswith("Change from previous")}}
+            for item, old in zip(comparison["rows"], rows, strict=True)
+        ]
+        a, b, c = st.columns(3)
+        a.metric("Year 0 comparison (SGD/year)", f"{comparison['baseline']:,.2f}")
+        b.metric("Average budget (SGD/year)", f"{comparison['average']:,.2f}")
+        c.metric(
+            "Average change (SGD/year)",
+            f"{comparison['increase']:+,.2f}",
+            f"{comparison['increase_percent']:+.2f}%" if comparison["increase_percent"] is not None else None,
+            delta_color="off",
+        )
+        st.caption(
+            "Year 0 = current headcount × selected starting rates × 12; a comparison, not actual previous contract spending."
+        )
+    elif plan.contract_kind == "existing contract":
+        st.caption(comparison["reason"])
+    fields = [baseline]
+    if comparison["available"] and any(r["Headcount change"] for r in rows):
+        fields.append("Headcount change")
     if any(r[general] for r in rows):
         fields.append(general)
-    if any(r.included and r.pwm for r in plan.roles) or any(r[pwm] for r in rows):
-        fields.append(pwm)
+    if any(r["PWM increase"] for r in rows):
+        fields.append("PWM increase")
     if any(r["Other adjustments"] for r in rows):
         fields.append("Other adjustments")
-    flat_reason = flat_cost_explanation(plan, result)
-    if flat_reason:
-        st.info(flat_reason)
-    figure = go.Figure()
-    for key in fields:
-        colour, label = styles[key]
-        figure.add_bar(
-            name=label,
+    chart = go.Figure()
+    chart_rows = rows
+    if comparison["available"]:
+        chart_rows = [
+            {
+                "Contract year": "Year 0 (current)",
+                **{f: comparison["baseline"] if f == baseline else 0 for f in fields},
+            },
+            *rows,
+        ]
+    colors = {
+        baseline: "#9AAEBF",
+        "Headcount change": "#4288B5",
+        general: "#147D74",
+        "PWM increase": "#8164B7",
+        "Other adjustments": "#B77625",
+    }
+    for field in fields:
+        chart.add_bar(
+            name="Accumulated general increase"
+            if field == general
+            else ("Current headcount cost" if comparison["available"] else "Starting-rate cost")
+            if field == baseline
+            else field,
+            x=[r["Contract year"] for r in chart_rows],
+            y=[r[field] for r in chart_rows],
+            marker_color=colors[field],
+            hovertemplate="%{x}<br>SGD %{y:,.2f}<extra>%{fullData.name}</extra>",
+        )
+    if comparison["available"] and any(r["Headcount change"] < 0 for r in rows):
+        chart.add_scatter(
+            name="Annual total",
             x=[r["Contract year"] for r in rows],
-            y=[r[key] for r in rows],
-            marker_color=colour,
-            hovertemplate="%{x}<br>" + key + ": SGD %{y:,.2f}<extra></extra>",
+            y=[r["Annual total"] for r in rows],
+            mode="markers",
+            marker=dict(color="#172B42", symbol="diamond", size=8),
+            hovertemplate="%{x}<br>Total SGD %{y:,.2f}<extra></extra>",
         )
-    figure.update_layout(
+    chart.update_layout(
         barmode="relative",
-        height=380,
-        yaxis_title="Annual cost (SGD)",
-        yaxis=dict(automargin=True),
-        legend=dict(orientation="h", y=-0.25),
-        margin=dict(l=10, r=10, t=15, b=95),
-        hovermode="x unified",
+        height=340,
+        yaxis_title="Annual manpower cost (SGD)",
+        legend=dict(orientation="h", y=-0.2),
+        margin=dict(l=10, r=10, t=10, b=80),
     )
-    st.plotly_chart(figure, width="stretch", key="annual_budget_breakdown")
-    view = st.radio(
-        "Budget view",
-        ["Annual totals", "Cost components"],
-        horizontal=True,
-        key=retained_key(f"final_budget_view_{plan.id}"),
-        label_visibility="collapsed",
-    )
-    if view == "Annual totals":
-        frame = pd.DataFrame(rows)[
-            [
-                "Contract year",
-                "Total annual manpower cost",
-                "Change from previous year (SGD)",
-                "Change from previous year (%)",
-            ]
-        ].rename(
-            columns={
-                "Contract year": "Year",
-                "Total annual manpower cost": "Annual cost (SGD)",
-                "Change from previous year (SGD)": "Change ($)",
-                "Change from previous year (%)": "Change (%)",
-            }
+    st.plotly_chart(chart, width="stretch", key="annual_budget_breakdown")
+    if comparison["available"]:
+        st.markdown("**What drives the increase?**")
+        st.dataframe(
+            comparison["impacts"],
+            hide_index=True,
+            width="stretch",
+            column_config={
+                "Average change per year (SGD)": st.column_config.NumberColumn(format="accounting"),
+                "Share of increase (%)": st.column_config.NumberColumn(format="%.2f%%"),
+            },
         )
-    else:
-        frame = pd.DataFrame(rows)[["Contract year", "Total annual manpower cost", *fields]].rename(
-            columns={"Contract year": "Year", "Total annual manpower cost": "Annual cost (SGD)"}
+        st.caption(
+            "Percentages show shares of the net increase over Year 0. Price changes apply to proposed headcount; negative amounts are reductions."
         )
-    # Preformat display only. Calculation/export values retain their existing precision.
-    for col in frame.columns:
-        if col != "Year":
-            frame[col] = frame[col].map(
-                lambda value, col=col: (
-                    "-" if pd.isna(value) else f"{value:,.2f}" + ("%" if col.endswith("(%)") else "")
-                )
-            )
     st.dataframe(
-        frame,
+        pd.DataFrame(rows).rename(
+            columns={
+                "Starting-rate manpower cost": "Starting-rate cost",
+                "Compounded annual manpower increase": "Accumulated general increase",
+                "Total annual manpower cost": "Annual total",
+                "Change from previous year (SGD)": "Change from prior year (SGD)",
+                "Change from previous year (%)": "Change from prior year (%)",
+            }
+        ),
         hide_index=True,
         width="stretch",
-        column_config={col: st.column_config.TextColumn(width="small") for col in frame.columns},
+        column_config={
+            key: st.column_config.NumberColumn(format="accounting")
+            for key in [
+                "Starting-rate cost",
+                "Current headcount at starting rates",
+                "Headcount change",
+                "General annual increase",
+                "Accumulated general increase",
+                "PWM increase",
+                "Other adjustments",
+                "Annual total",
+                "Change from prior year (SGD)",
+            ]
+        },
     )
-    if view == "Annual totals":
-        st.caption("Change compares the annual total with the previous year.")
-    if view == "Cost components":
+    if not comparison["available"]:
         st.caption(
-            "Starting-rate manpower cost uses each year's deployment at the confirmed starting rates. Increases are accumulated additions; amounts are SGD."
+            "Starting-rate cost values each year's deployment at confirmed starting rates. General/PWM increases are accumulated additions to that baseline; the prior-year change is the difference between annual totals. Components reconcile to the budget."
         )
-        if "Other adjustments" in fields:
-            st.caption(
-                "Other adjustments include quoted future-price changes and recorded component adjustments."
-            )
-    if any(r[general] < 0 or r["Other adjustments"] < 0 for r in rows):
-        st.caption("Negative chart segments are cost reductions included in the annual totals.")
-    if any(r["Deployment change at starting rates"] for r in changes):
-        with st.expander("Why annual totals change"):
-            st.dataframe(
-                changes,
-                hide_index=True,
-                width="stretch",
-                column_config={
-                    k: st.column_config.NumberColumn(format="accounting")
-                    for k in changes[0]
-                    if k != "Contract year"
-                },
-            )
-            st.caption(
-                "Deployment changes are valued at starting rates. Remaining changes include annual increases, "
-                "PWM and other adjustments; the components reconcile to the annual change."
-            )
+    if movements and any(r["Deployment change at starting rates"] for r in movements):
+        with st.expander("Explain changes in yearly deployment"):
+            st.dataframe(movements, hide_index=True, width="stretch")
 
 
 def sensitivity_review(plan, records, on_edit=None):
@@ -312,64 +331,37 @@ def sensitivity_review(plan, records, on_edit=None):
     st.caption(
         "Lower/higher: minus/plus 1 percentage point from Year 2. Deployment, starting rates, quoted prices, PWM and fixed adjustments stay fixed. Your selected assumptions are unchanged."
     )
-    for column, row in zip(st.columns(3), rows, strict=True):
-        with column.container(border=True):
-            st.metric(
-                row["Scenario"] + " (SGD)",
-                f"{row['Full contract budget']:,.2f}"
-                if row["Full contract budget"] is not None
-                else "Unavailable",
-            )
-            st.caption(row["Annual increase / yearly profile"])
-            if row["Difference from selected (SGD)"] is not None:
-                pct = row["Difference from selected (%)"]
-                st.caption(
-                    f"SGD {row['Difference from selected (SGD)']:+,.2f} ({pct:+.2f}%) vs selected"
-                    if pct is not None
-                    else f"SGD {row['Difference from selected (SGD)']:+,.2f} vs selected"
-                )
-            if row["Scenario"].startswith("Selected"):
-                st.caption("Selected budget - unchanged by this comparison")
-    valid = [r for r in rows if r["Full contract budget"] is not None]
-    chart = go.Figure(
-        go.Bar(
-            x=[r["Difference from selected (SGD)"] for r in valid],
-            y=[r["Scenario"] for r in valid],
-            orientation="h",
-            marker_color=[
-                "#4288B5"
-                if r["Scenario"].startswith("Lower")
-                else "#147D74"
-                if r["Scenario"].startswith("Selected")
-                else "#B77625"
-                for r in valid
-            ],
-            text=[f"SGD {r['Difference from selected (SGD)']:+,.2f}" for r in valid],
-            textposition="auto",
-            hovertemplate="%{y}<br>Difference: SGD %{x:,.2f}<extra></extra>",
-        )
+    st.dataframe(
+        rows,
+        hide_index=True,
+        width="stretch",
+        column_config={
+            "Full contract budget": st.column_config.NumberColumn(format="accounting"),
+            "Difference from selected (SGD)": st.column_config.NumberColumn(format="accounting"),
+        },
     )
-    chart.add_annotation(
-        x=0,
-        y="Selected annual increase",
-        text="Selected budget",
-        showarrow=False,
-        xanchor="left",
-        yshift=12,
-        font=dict(color="#147D74"),
-    )
-    chart.update_layout(
-        height=290,
-        yaxis=dict(autorange="reversed"),
-        xaxis_title="Difference from selected contract budget (SGD)",
-        margin=dict(l=10, r=20, t=15, b=40),
-    )
-    st.plotly_chart(chart, width="stretch", key="annual_increase_sensitivity")
+    if on_edit is None:
+        from services.scenario_selection import adopt_scenario
+
+        lower, higher = st.columns(2)
+        for column, label, delta, row in [
+            (lower, "Adopt lower scenario", -0.01, rows[0]),
+            (higher, "Adopt higher scenario", 0.01, rows[2]),
+        ]:
+            if column.button(
+                label, key=f"adopt_scenario_{plan.id}_{delta}", disabled=row["Full contract budget"] is None
+            ):
+                try:
+                    adopt_scenario(plan, delta, st.session_state.officer, records)
+                    plan.ui_step = 4
+                    st.rerun()
+                except ValueError as error:
+                    st.info(str(error))
     if any(r["Annual increase / yearly profile"].startswith("Varies by role") for r in rows):
         with st.expander("Scenario profiles by manpower group"):
             st.dataframe(profiles, hide_index=True, width="stretch")
     if st.button(
-        "Change annual increase in Step 5" if on_edit is None else "Change future cost assumptions",
+        "Change annual increase in Step 4" if on_edit is None else "Change future cost assumptions",
         key=f"final_sensitivity_edit_{plan.id}",
     ):
         if on_edit is None:
@@ -542,12 +534,15 @@ def finding_control(plan, finding, officer, sync_controls):
 
 
 def supporting_review(plan, records, current, result):
-    from services.final_review import qualification_summary, source_summary
-    from services.pwm import get_schedule
+    from services.final_review import source_summary
 
     st.markdown("**Starting monthly rates**")
-    rates, sources, _ = source_summary(plan, records)
-    st.dataframe(rates, hide_index=True, width="stretch")
+    rates, _, _ = source_summary(plan, records)
+    st.dataframe(
+        [{key: value for key, value in row.items() if key != "Basis"} for row in rates],
+        hide_index=True,
+        width="stretch",
+    )
     st.markdown("**Future cost assumptions**")
     explanations = list(
         dict.fromkeys(b.explanation for b in plan.decision_bases if b.kind == "escalation" and b.explanation)
@@ -562,28 +557,8 @@ def supporting_review(plan, records, current, result):
         st.caption(
             "The selected annual increase is shown in the budget summary; no separate explanation is recorded."
         )
-    for role in plan.roles:
-        if not role.included or not role.pwm:
-            continue
-        try:
-            schedule = get_schedule(role.pwm.schedule_id)
-        except ValueError:
-            st.caption(role.label + ": the saved PWM schedule needs correction.")
-            continue
-        st.write(
-            f"{role.label}: {schedule['category']} / {schedule['job_level']}; {role.pwm.covered_quantity} covered workers. Published through {schedule['valid_until']}."
-        )
-        st.caption(
-            "Eligibility and salary components follow recorded officer confirmations. This is a budget estimate, not a complete payroll compliance assessment."
-        )
-        st.link_button(
-            "PWM source: " + schedule["category"], schedule["source"], key=f"final_pwm_source_{role.id}"
-        )
-        if role.pwm.beyond_published != "unselected":
-            st.caption("Unpublished periods: " + role.pwm.beyond_published + ". " + role.pwm.beyond_reason)
-    st.markdown("**Assumptions and qualifications**")
-    for text in qualification_summary(plan, current):
-        st.write(text)
+    if any(role.included and role.pwm for role in plan.roles):
+        st.caption("Source of PWM: MOM website.")
     st.markdown("**Excluded costs**")
     st.write(
         plan.profile.exclusions
@@ -604,28 +579,12 @@ def supporting_review(plan, records, current, result):
     if adjustments:
         st.markdown("**Other recorded adjustments**")
         st.dataframe(adjustments, hide_index=True, width="stretch")
-    if sources:
-        st.markdown("**Reference sources**")
-        for source in sources:
-            if source.startswith(("https://", "http://")):
-                st.link_button("Reference source", source)
-            else:
-                st.caption(source)
 
 
-def final_review(plan, records, officer, save, sync_controls):
-    from journey_inputs import pending_control_errors
-    from services.export import export_excel
-    from services.final_review import action_presentation, review_state, source_summary
-    from services.workflow import confirm
-
-    results_style()
-    state = review_state(plan, records, pending_control_errors(plan))
-    result = state["result"]
-    (st.success if state["confirmed"] else st.info)("Budget status: " + state["status"])
+def budget_totals(plan, result):
     if result:
         a, b, c = st.columns(3)
-        a.metric("Full contract EPV (SGD)", f"{result['contract_total']:,.2f}")
+        a.metric("Full contract manpower budget (SGD)", f"{result['contract_total']:,.2f}")
         b.metric(
             "Base contract period - "
             + (f"Years 1-{plan.profile.base_years}" if plan.profile.base_years > 1 else "Year 1")
@@ -646,6 +605,19 @@ def final_review(plan, records, officer, save, sync_controls):
         st.info(
             "Budget totals are not yet available. Complete the specific inputs listed below; the project draft remains saved separately."
         )
+
+
+def final_review(plan, records, officer, save, sync_controls):
+    from journey_inputs import pending_control_errors
+    from services.export import export_excel
+    from services.final_review import action_presentation, review_state
+    from services.workflow import confirm
+
+    results_style()
+    state = review_state(plan, records, pending_control_errors(plan))
+    result = state["result"]
+    (st.success if state["confirmed"] else st.info)("Budget status: " + state["status"])
+    budget_totals(plan, result)
     profiles = {
         tuple(r.escalation)
         for r in plan.roles
@@ -666,21 +638,7 @@ def final_review(plan, records, officer, save, sync_controls):
         )
     pwm_roles = [r for r in plan.roles if r.included and r.pwm]
     if pwm_roles:
-        st.caption(
-            "PWM salary progression applies to confirmed covered workers; recorded employer on-cost is included where applicable."
-        )
-    if source_summary(plan, records)[2]:
-        st.caption("Demo reference data \u2014 replace with validated tender data before operational use.")
-    if plan.pending or plan.working_notes:
-        st.caption(
-            "The figures shown use the recorded plan. Unapplied changes need review before this version can be confirmed."
-        )
-    if any(r.pwm and r.pwm.beyond_published != "unselected" for r in pwm_roles):
-        st.caption(
-            "PWM periods beyond published schedules use the recorded officer treatment; see supporting evidence."
-        )
-    if plan.profile.exclusions:
-        st.caption("Excluded costs: " + plan.profile.exclusions)
+        st.write("PWM increment: in accordance with rates published on the MOM website.")
     if state["actions"]:
         st.markdown("### What needs your attention")
     for index, action in enumerate(state["actions"]):
@@ -729,6 +687,11 @@ def final_review(plan, records, officer, save, sync_controls):
                     else "Review deployment"
                 )
             if st.button(action_label, key=f"final_action_{plan.id}_{index}"):
+                affected_names = {row["Role"] for row in details if row.get("Role")}
+                affected_ids = [r.id for r in plan.roles if r.label in affected_names]
+                if action["kind"] == "finding":
+                    affected_ids = [finding.role_id] if finding.role_id else affected_ids
+                st.session_state["review_focus_" + plan.id] = {"step": action["step"], "roles": affected_ids}
                 go_to_step(plan, action["step"])
     tabs = st.tabs(
         ["Budget", "Scenarios", "Manpower", "Assumptions & sources"],
@@ -767,7 +730,7 @@ def final_review(plan, records, officer, save, sync_controls):
             short, _, _ = action_presentation(plan, state["actions"][0])
             st.caption("Before confirmation: " + short)
         if st.button(
-            "Confirm budget",
+            "Confirm final budget",
             key="confirm_final_budget",
             disabled=state["confirmed"]
             or bool(state["actions"])

@@ -206,6 +206,7 @@ ALIASES = {
     "designation": "Role",
     "quantity": "Quantity",
     "qty": "Quantity",
+    "proposed quantity": "Quantity",
     "headcount": "Quantity",
     "fte": "Quantity",
     "unit": "Unit",
@@ -214,6 +215,7 @@ ALIASES = {
     "rate": "Monthly rate",
     "unit rate": "Monthly rate",
     "monthly rate per head": "Monthly rate",
+    "monthly unit rate (sgd)": "Monthly rate",
     "annual increase (%)": "Annual increase (%)",
     "escalation (%)": "Annual increase (%)",
     "escalation": "Annual increase (%)",
@@ -221,6 +223,7 @@ ALIASES = {
     "remarks": "Remarks",
     "duties": "Remarks",
     "notes": "Remarks",
+    "operational rationale / deployment remarks": "Remarks",
     "experience": "Experience",
     "qualification": "Qualifications",
     "qualifications": "Qualifications",
@@ -231,14 +234,19 @@ ALIASES = {
     "source location": "Source location",
     "pricing basis": "Pricing basis",
     "pricing reason": "Pricing basis",
+    "proposed method": "Proposed method",
+    "proposed escalation method": "Proposed method",
+    "current quantity": "Current quantity",
 }
 COLUMNS = [
     "Role",
     "Quantity",
+    "Current quantity",
     "Unit",
     "Monthly rate",
     "Pricing basis",
     "Annual increase (%)",
+    "Proposed method",
     "Remarks",
     "Experience",
     "Qualifications",
@@ -271,8 +279,12 @@ def normalise_table(rows, source):
         if not row["Role"]:
             continue
         row["Role"] = str(row["Role"]).strip()
+        from services.proposal_intake import method
+
+        row["Proposed method"] = method(row.get("Proposed method")) or None
         for label in (
             "Quantity",
+            "Current quantity",
             "Monthly rate",
             "Annual increase (%)",
             "Supplied monthly total",
@@ -284,7 +296,7 @@ def normalise_table(rows, source):
             except (ValueError, TypeError):
                 row[label] = None  # Uninterpreted source remains in raw evidence; never a false zero.
         row["Unit"] = {"fte": "FTE", "headcount": "headcount", "heads": "headcount", "pax": "headcount"}.get(
-            str(row["Unit"]).casefold(), "unspecified"
+            str(row["Unit"]).strip().casefold(), "unspecified"
         )
         if row["Unit"] == "unspecified":
             headers = {str(k).strip().casefold() for k in raw}
@@ -378,6 +390,21 @@ def extract_document(name, data):
         text = data.decode("utf-8-sig")
         rows, notes = interpret_text(text, name)
     elif suffix in ("xlsx", "docx"):
+        if suffix == "xlsx":
+            from services.proposal_intake import extract_template
+
+            with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                if sum(x.file_size for x in archive.infolist()) > 40 * 1024 * 1024:
+                    raise ValueError("The expanded document is too large")
+            captured = extract_template(data, name)
+            if captured is not None:
+                return {
+                    "name": name,
+                    "sha256": hashlib.sha256(data).hexdigest(),
+                    "bytes_base64": base64.b64encode(data).decode(),
+                    "text": "",
+                    **captured,
+                }
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             if sum(x.file_size for x in archive.infolist()) > 40 * 1024 * 1024:
                 raise ValueError("The expanded document is too large")
@@ -415,12 +442,31 @@ def extract_document(name, data):
                             if cell.get("t") == "s" and value:
                                 value = strings[int(value)]
                             values[re.sub(r"\d", "", cell.get("r", ""))] = value
-                        grid.append(values)
+                        grid.append((r.get("r"), values))
                     if grid:
-                        headers = grid[0]
+                        index = next(
+                            (
+                                i
+                                for i, (_, row) in enumerate(grid)
+                                if any(
+                                    ALIASES.get(str(value).strip().casefold()) == "Role"
+                                    for value in row.values()
+                                )
+                            ),
+                            None,
+                        )
+                        if index is None:
+                            continue
+                        headers = grid[index][1]
                         rows.extend(
                             normalise_table(
-                                [{header: r.get(col) for col, header in headers.items()} for r in grid[1:]],
+                                [
+                                    {
+                                        **{header: r.get(col) for col, header in headers.items()},
+                                        "Source location": f"{name}, {sheet}, row {rowno}",
+                                    }
+                                    for rowno, r in grid[index + 1 :]
+                                ],
                                 f"{name}, {sheet}",
                             )
                         )
@@ -465,7 +511,8 @@ def plan_from_rows(profile, rows, pid=None):
         role = Role(
             id=str(row.get("id") or uuid4()),
             label=title,
-            quantity=qty,
+            quantity=qty if qty is None or qty >= 0 else None,
+            current_quantity=number(row.get("Current quantity")),
             included=qty != 0,
             exclusion_reason=remarks or "Zero quantity in supplied proposal" if qty == 0 else "",
             quantity_unit=str(row.get("Unit") or "unspecified"),
@@ -473,11 +520,16 @@ def plan_from_rows(profile, rows, pid=None):
             duties_notes=remarks,
             experience=str(row.get("Experience") or ""),
             qualifications=str(row.get("Qualifications") or ""),
-            rate=rate,
+            rate=rate if rate is None or rate > 0 else None,
             rate_reason=str(row["Pricing basis"])
             if row.get("Pricing basis") is not None
             else f"Inclusive monthly manpower charge supplied at {source}; officer input, not independently verified.",
-            escalation=[0.0]
+            escalation=[]
+            if row.get("Assumption conflict")
+            or (annual is not None and not -50 <= annual <= 100)
+            or str(row.get("Proposed method") or "").casefold()
+            not in ("", "general annual increase", "supplied yearly prices")
+            else [0.0]
             if plan.profile.years == 1
             else []
             if annual is None
@@ -492,8 +544,26 @@ def plan_from_rows(profile, rows, pid=None):
             or (plan.profile.start.year if plan.profile.start else None),
         )
         plan.roles.append(role)
+        if (
+            row.get("Yearly increases")
+            and not row.get("Assumption conflict")
+            and str(row.get("Proposed method") or "").casefold() != "pwm"
+        ):
+            profile_values = row["Yearly increases"]
+            if (
+                len(profile_values) == plan.profile.years
+                and profile_values[0] == 0
+                and all(v is not None and -50 <= v <= 100 for v in profile_values)
+            ):
+                role.escalation = [v / 100 for v in profile_values]
+                role.escalation_reason = (
+                    f"Supplied year-specific increases at {source}; retained officer proposal."
+                )
     if not plan.roles:
         raise ValueError("Enter at least one proposed role")
+    if any(r.current_quantity is not None for r in plan.roles):
+        plan.contract_kind = "existing contract"
+        plan.current_deployment_status = "known"
     return plan
 
 
@@ -509,6 +579,20 @@ def capture_original(p, profile, rows, rate_basis_confirmed):
     quoted = []
     for role, row in zip(plan.roles, [r for r in rows if str(r.get("Role") or "").strip()], strict=True):
         if row.get("Yearly rates"):
+            if (
+                row.get("Assumption conflict")
+                or row.get("Annual increase (%)") not in (None, 0)
+                or str(row.get("Proposed method") or "").casefold() in ("pwm", "pwm salary progression")
+            ):
+                role.escalation = []
+                role.escalation_reason = (
+                    "Supplied future methods conflict; choose the intended treatment before projection."
+                )
+                p.drafts.setdefault("quote_interpretation_issues", []).append(
+                    role.label
+                    + ": choose between supplied yearly prices and the other proposed increase before calculating."
+                )
+                continue
             try:
                 quoted.extend(
                     set_quote(
@@ -524,6 +608,12 @@ def capture_original(p, profile, rows, rate_basis_confirmed):
                 p.drafts.setdefault("quote_interpretation_issues", []).append(str(error))
     p.original = plan.model_copy(deep=True)
     p.plan = plan
+    from services.cost_routing import resolve_route
+
+    for role in p.plan.roles:
+        route = resolve_route(role)
+        if route["route"] != "demonstration":
+            role.future_routing = route
     p.name = plan.profile.name
     p.original_rows = json.loads(json.dumps(rows, default=str))
     p.original_documents = json.loads(json.dumps(p.documents))
@@ -594,6 +684,7 @@ def update_reviewed(p, profile, rows, officer):
                 "benchmark_year",
                 "benchmark_scope",
                 "benchmark_status",
+                "future_routing",
             ):
                 setattr(role, key, getattr(old, key))
         if old != role:
@@ -617,6 +708,20 @@ def assessment(p, records):
     plan = p.plan
     issues = findings(plan, records)
     extra = []
+    from services.proposal_workflow import material_checks
+
+    for check in material_checks(p, records):
+        if check["kind"] in ("wrong_method", "conflict", "method", "scope", "pwm_overlap"):
+            extra.append(
+                Finding(
+                    id="proposal_method:" + check["role_id"],
+                    code="proposal_method",
+                    role_id=check["role_id"],
+                    message=check["Role"] + ": " + check["Issue"],
+                    impact=check["Next action"],
+                    blocking=True,
+                )
+            )
     for r in plan.roles:
         if r.included and r.quantity_unit not in ("headcount", "FTE"):
             extra.append(
@@ -712,6 +817,8 @@ def assessment(p, records):
         )
     for row in p.original_rows:
         if row.get("Yearly rates") and number(row.get("Annual increase (%)")) not in (None, 0):
+            if row["id"] in p.drafts.get("input_resolutions", {}):
+                continue
             role = next((r for r in plan.roles if r.id == row["id"]), None)
             if role is None or not role.included:
                 continue
@@ -808,6 +915,9 @@ def comparison(p, records):
         "reviewed": reviewed,
         "difference": delta,
         "percent": delta / old * 100 if delta is not None and old else None,
+        "original_unavailable_reason": "The original proposal has missing inputs, an unconfigured PWM salary component, conflicting assumptions or an unsupported supplied price profile; no original total or cost difference is invented."
+        if original is None
+        else "",
     }
 
 
@@ -893,7 +1003,14 @@ def rate_comparisons(plan, records):
     for r in plan.roles:
         if not r.included:
             continue
-        bm = rate_benchmark(records, r.mapped_role, r.benchmark_year, r.benchmark_status, r.benchmark_scope)
+        bm = rate_benchmark(
+            records,
+            r.mapped_role,
+            r.benchmark_year,
+            r.benchmark_status,
+            r.benchmark_scope,
+            quantity_unit=r.quantity_unit,
+        )
         low, high = bm.get("minimum"), bm.get("maximum")
         rows.append(
             {

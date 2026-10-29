@@ -217,7 +217,7 @@ def basis_errors(plan, kind, records):
                 generated = r.quantity_reason.startswith("Officer-provided quantity in manpower table")
                 if generated or not meaningful(r.quantity_reason):
                     errors.append(
-                        f"{r.label}: explain {'the staffing change' if changed else 'the new-site quantity'} (a shared basis can cover related roles)."
+                        f"{r.label}: explain {'the staffing change' if changed else 'the new-site quantity'} in the table's Operational rationale column."
                     )
         elif kind == "rate" and r.rate is not None:
             if (
@@ -352,6 +352,7 @@ def trace_rows(plan, records):
                     role.benchmark_year,
                     role.benchmark_status,
                     role.benchmark_scope,
+                    quantity_unit=role.quantity_unit,
                 )
                 original = bm["average"]
                 source = (

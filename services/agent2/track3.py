@@ -93,7 +93,10 @@ def analysis_input_fingerprint(
     relevant_project = {
         key: project.get(key) for key in ("duration", "base_years", "option_years", "start", "currency")
     }
+    from services.reference_data import metadata
+
     payload = {
+        "reference": metadata(),
         "project": relevant_project,
         "budget": _canonical_frame(budget),
         "tenderers": {name: _canonical_frame(tenderers[name]) for name in sorted(tenderers)},
@@ -673,7 +676,13 @@ def compare_track3(
             b_cost = float(b["Annual Cost"].sum()) if not b.empty else 0.0
             t_cost = float(t["Annual Cost"].sum()) if not t.empty else 0.0
             cost_pct = (t_cost - b_cost) / b_cost if b_cost else None
-            benchmark = rate_benchmark(records, role, year=benchmark_year, status="both")
+            benchmark = rate_benchmark(
+                records,
+                role,
+                year=benchmark_year,
+                status="both",
+                quantity_unit=str(t_y1["Quantity Unit"].iloc[0]) if not t_y1.empty else None,
+            )
             benchmark_text = position(t_rate, benchmark) if t_rate is not None else "No submitted rate"
             role_rows.append(
                 {

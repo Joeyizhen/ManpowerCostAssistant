@@ -226,8 +226,9 @@ def test_custom_years_compound_and_exports_reconcile_without_source_formula_exec
     result = comparison(p, load_records())
     assert result["reviewed"]["contract_total"] == 196800
     data = openpyxl.load_workbook(io.BytesIO(workbook(p, load_records())), data_only=True)
-    summary = dict(data["Review summary"].iter_rows(min_row=4, max_col=2, values_only=True))
-    assert summary["Reviewed EPV"] == 196800 and summary["Original recalculated EPV"] == 192000
+    total = next(row for row in data["Budget summary"].values if row[0] == "Annual overall totals")
+    assert total[3] == 196800
+    assert result["original"]["contract_total"] == 192000
     assert {"Original proposal", "Reviewed proposal", "Findings and decisions", "Source locations"} <= set(
         data.sheetnames
     )
@@ -362,31 +363,33 @@ def test_track2_offline_capture_check_results_confirm_and_resume(monkeypatch, tm
     at.session_state["proposal"] = p
     at.run()
     assert not at.exception
-    assert [x.label for x in at.tabs] == [
-        "Figures",
-        "Operational checks",
-        "Future costs",
-        "Material findings",
-    ]
-    at.text_area(key="proposal_operational_note_" + p.id).set_value(
-        "Weekday office coordination workload retained; specialist technical duties are separately procured"
-    ).run()
-    at.checkbox(key="proposal_checked_" + p.id).check().run()
+    assert at.session_state["proposal"].plan.ui_step == 1
+    at.button(key="t2_confirm_deployment_" + p.id).click().run()
+    assert not at.exception
+    assert at.session_state["proposal"].plan.ui_step == 3
     role = at.session_state["proposal"].plan.roles[0]
-    prefix = f"proposal_rate_{p.id}_{role.id}_{at.session_state['proposal'].plan.version}"
-    at.selectbox(key="proposal_rate_role_" + p.id).set_value(role.id).run()
-    at.slider(key=prefix + "_range").set_value(9000.0).run()
-    assert at.number_input(key=prefix + "_exact").value == 9000
-    assert at.session_state["proposal"].plan.roles[0].rate == 8000
-    assert at.button(key="proposal_review_confirm_" + p.id).disabled
-    at.button(key=prefix + "_apply").click().run()
+    prefix = f"rate_{p.plan.id}_{role.id}_{role.benchmark_year}"
+    at.number_input(key=prefix + "_number").set_value(9000.0).run()
     assert not at.exception
     assert at.session_state["proposal"].plan.roles[0].rate == 9000
     assert at.session_state["proposal"].original.roles[0].rate == 8000
-    assert not at.button(key="proposal_review_confirm_" + p.id).disabled
-    at.button(key="proposal_review_confirm_" + p.id).click().run()
+    note = next((n for n in at.text_area if n.label.startswith("Short pricing reason")), None)
+    if note:
+        note.set_value(
+            "Revised supplier quotation for weekday coordination with the same inclusive basis"
+        ).run()
+    at.button(key="confirm_rates").click().run()
     assert not at.exception
-    assert [x.label for x in at.tabs] == ["Budget", "Scenarios", "Manpower", "Assumptions & sources"]
+    assert at.session_state["proposal"].plan.ui_step == 4
+    at.button(key="confirm_escalation").click().run()
+    assert not at.exception
+    assert [x.label for x in at.tabs] == [
+        "Budget",
+        "Scenarios",
+        "Manpower",
+        "Assumptions & sources",
+        "Changes from your original proposal",
+    ]
     assert "final" not in at.session_state["proposal"].plan.confirmations
     at.button(key="proposal_final_" + p.id).click().run()
     assert not at.exception

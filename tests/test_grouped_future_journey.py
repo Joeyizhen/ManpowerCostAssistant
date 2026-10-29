@@ -110,9 +110,9 @@ def test_ui_default_reference_is_preview_then_single_confirmation(monkeypatch, t
     assert not at.radio
     # Existing saved 2% profile is carried forward as an assumption, not silently replaced.
     assert at.number_input(key=f"common_future_{p.id}_percent").value == 2.0
-    at.checkbox(key=f"common_future_{p.id}_custom").uncheck().run()
     bm = general_reference(p, load_records(), ["fm"])
-    assert at.slider(key=f"common_future_{p.id}_percent").value == round(bm["average"] * 100, 2)
+    at.number_input(key=f"common_future_{p.id}_percent").set_value(round(bm["average"] * 100, 2)).run()
+    assert at.number_input(key=f"common_future_{p.id}_percent").value == round(bm["average"] * 100, 2)
     assert not at.button(key="confirm_escalation").disabled
     before = p.roles[0].rate_reason
     at.button(key="confirm_escalation").click().run()
@@ -133,20 +133,19 @@ def test_new_reference_defaults_to_average_and_custom_draft_survives_save_resume
     at.session_state["plan"] = p
     at.run()
     bm = general_reference(p, load_records(), ["fm"])
-    assert at.slider(key=f"common_future_{p.id}_percent").value == round(bm["average"] * 100, 2)
+    assert at.number_input(key=f"common_future_{p.id}_percent").value == round(bm["average"] * 100, 2)
     assert "escalation" not in p.confirmations
-    at.checkbox(key=f"common_future_{p.id}_custom").check().run()
     at.number_input(key=f"common_future_{p.id}_percent").set_value(4.0).run()
     assert not at.button(key="confirm_escalation").disabled
     at.text_area(key=f"common_future_{p.id}_reason").set_value("Contractor renewal forecast").run()
-    button(at, "Save project").click().run()
+    button(at, "Save draft").click().run()
     p = at.session_state["plan"]
     at.text_area(key=f"common_future_{p.id}_reason").set_value("Revised contractor renewal forecast").run()
     button(at, "Resume selected project").click().run()
     at.button(key="save_and_switch").click().run()
     assert not at.exception and not at.error
     assert at.text_area(key=f"common_future_{p.id}_reason").value == "Revised contractor renewal forecast"
-    button(at, "Save project").click().run()
+    button(at, "Save draft").click().run()
     assert not at.error
 
 
@@ -209,7 +208,7 @@ def test_layout_upgrade_captures_raw_future_draft_and_keeps_other_findings(monke
     at.button(key=f"future_clear_legacy_{p.id}").click().run()
     kept = at.session_state["plan"].basis_drafts["_ui_controls"]["values"]
     assert key not in kept and kept[finding_key] == "Retained officer qualification"
-    button(at, "Save project").click().run()
+    button(at, "Save draft").click().run()
     assert (
         at.session_state["plan"].basis_drafts["_ui_controls"]["values"][finding_key]
         == "Retained officer qualification"

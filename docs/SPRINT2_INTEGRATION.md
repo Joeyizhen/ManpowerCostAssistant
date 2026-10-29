@@ -1,3 +1,9 @@
+# Shared reference increment — 27 October 2026
+
+Prepared selection **bf02f4c629b7f181-sprint2-reference-v1** is now activated for both activities on `integration/sprint2`. The following navigation report is historical; its statements about inactive v2/unchanged evidence services describe the preceding milestone. See [the shared reference report](PREPARED_REFERENCES.md) for eligibility, equal-submission sampling, source examples, PWM differences, checks and reversible activation. Live budget transfer and direct cross-tenderer comparison are still separate follow-ups.
+
+---
+
 # Sprint 2 combined application — 27 October 2026
 
 This is a local navigation and composition milestone. It makes four existing workflows accessible in one application. It does not establish a trusted cross-track handoff or activate shared historical data.

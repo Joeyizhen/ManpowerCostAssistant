@@ -4,6 +4,8 @@ from copy import deepcopy
 
 import streamlit as st
 
+NAVIGATION_UI_VERSION = 1
+
 ACTIVITIES = {
     "budgeting": ("Manpower budgeting", "Build or review a manpower budget."),
     "tender": ("Tender evaluation", "Review tender submissions against a budget or other tenderers."),
@@ -95,9 +97,6 @@ def show_activity_options():
                 )
         if activity == "tender":
             st.caption("Historical data management — Planned.")
-    st.caption(
-        "Drafts stay in this session when you change activity. Save or download work to keep it for later."
-    )
     st.stop()
 
 

@@ -1,4 +1,91 @@
-# Independent Track 2 proposal review — 27 October 2026
+# Shared Track 2 budgeting workflow — 30 October 2026
+
+Track 2 is an alternative entry into Agent 1: **Upload existing proposal → check figures
+and assumptions → view the reviewed budget**. After interpretation, its decision
+navigation opens Deployment, Starting rates, Annual changes and Budget using the
+shared services and controls. Supplied, sufficient inputs remain populated. Track 1
+keeps its five-screen journey and its independent active Plan.
+
+## Current implementation
+
+- Standard upload files are `data/templates/track2-blank-template.xlsx` and
+  `data/templates/track2-preplanned-budget-sample.xlsx`. Both use Project, Proposed
+  manpower and Proposed escalation sheets. The filled sample is an invented existing
+  office with 7 current and 8 proposed staff, a January 2027 start and 1 base plus
+  1 option year. Four roles include general FM manpower and two Cleaners. Monthly
+  starting charges total SGD 35,500. Future assumptions are blank: the shared annual
+  screen recommends a supported general increase and guides the PWM setup. No
+  contract total is preloaded or approved. All proposal charges are illustrative.
+- The first screen leads with upload and Read my proposal. Template/sample controls
+  and manual entry are secondary. Project fields, the captured table and confirmation
+  controls appear only after reading input, loading the normal sample or choosing
+  manual entry. Saved intake drafts remain accessible. Exact missing context,
+  quantities and monthly charges are listed for completion in the shared review.
+- Try a sample proposal reads the same ordinary workbook offered for download. The
+  older intentional-error workbook is retained only as a regression fixture; its
+  download and load path are removed from the normal interface.
+- Downloadable blank and example Excel workbooks have Project, Proposed manpower
+  and Proposed escalation sheets. Current deployment is optional. The same parser
+  handles upload and Load example proposal, without preloaded findings or approvals.
+- Deployment-only proposals are supported. Readable questionable methods import as
+  assumptions to review; malformed structure identifies the field or worksheet.
+  Other supported CSV, generic XLSX, TXT, PDF and DOCX routes remain available.
+- Captured documents, original rows, source locations, original model and digest
+  remain separate from the reviewed plan. Explicit current quantities select the
+  existing-contract comparison; absent current quantities stay unanswered.
+- `services/cost_routing.py` supplies the same prepared Standard Roles flags to both
+  tracks. An explicit No cannot be overridden by title keywords. Missing mapping or
+  eligibility requires clarification; PWM never implies a salary split.
+- Material checks identify the role, issue and next action. A wrong PWM assignment
+  offers a preview of the general reference or an explicit custom assumption if
+  evidence is insufficient. Acceptance is separate from preview, save and approval.
+  Editing the plan invalidates a stale correction preview.
+- `services/ui_context.py` directs shared pricing, annual-change and decision
+  callbacks to the active Track 2 plan. Existing pending form edits from the earlier
+  proposal interface remain unapplied until the officer uses or dismisses them.
+- The calculator, references, effective-date/PWM safeguards, annual compounding,
+  confirmation invalidation, result components and workbook exporter are reused.
+  Results have Budget, Scenarios, Manpower, Assumptions & sources and Changes from
+  your original proposal tabs. Original/reviewed percentages, quantities, rates,
+  methods and reasons accompany calculable cost differences. An uncalculable
+  original has no manufactured original total or variance.
+
+## Short demonstration
+
+1. Open Manpower budgeting → Review a proposed budget → Need a template or sample?
+   → Try a sample proposal. Or upload the filled sample and select Read my proposal.
+2. Check the populated project context and four role rows. Confirm inclusive monthly
+   charge semantics and the captured interpretation. No annual percentage is supplied.
+3. Confirm the deployment and supplied starting charges in the shared review steps.
+4. At Annual changes, inspect the supported general annual recommendation for the
+   FM roles. No exact rate is hardcoded into the sample or invented if unavailable.
+5. At Annual changes, review the Cleaner's actual category and eligibility. The
+   example explicitly supplies two covered workers and an invented salary component
+   of SGD 2,300 per worker; neither is inferred from its SGD 3,600 contractor charge.
+   Confirm the flat remainder and apply salary-only PWM before continuing.
+6. Confirm future assumptions and inspect the shared budget and Changes from your original proposal; export a
+   draft or separately confirm the budget after resolving essential missing inputs.
+
+The example contains invented proposal inputs, not observed reference records.
+These steps deliberately retain the necessary officer confirmations.
+
+## Verification and limits
+
+Current verification is recorded in the latest handover and validation log. Template
+extraction, deterministic detection/calculation, mocked assistant interaction and
+browser interaction are assessed separately. Mocked interaction does not prove live
+assistant detection. No paid model evaluation was run.
+
+The active prepared source is the existing sanitised v3 snapshot, with its original
+provenance and comparability limitations. No reference cleaning, generated historical
+records, new import, unrelated integration, merge, push or deployment was performed.
+Missing comparable unit/inclusion evidence still prevents a supported monthly-rate
+recommendation. Published PWM schedule coverage and first-of-month handling remain
+explicit safeguards; OCR, live assistant quality and production hosting are unverified.
+
+---
+
+# Historical checkpoint — 27 October 2026 (superseded above)
 
 Track 2 is implemented locally as **Add proposed budget → check figures and assumptions → view the reviewed budget**. It does not copy Track 1's six screens. Track 1 remains the new-plan journey. Integration with Tracks 3/4 is deferred.
 

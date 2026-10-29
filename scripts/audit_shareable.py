@@ -28,7 +28,9 @@ ROOT_FILES = {
     "future_inputs.py",
     "pricing_inputs.py",
     "proposal_inputs.py",
+    "proposal_journey.py",
     "review_inputs.py",
+    "selection_controls.py",
     "ui_drafts.py",
 }
 EXCLUDED_PROBES = [
@@ -86,6 +88,32 @@ def allowed(path):
 
 
 def issues_for(path, content):
+    if path in {
+        "data/templates/track2-blank-template.xlsx",
+        "data/templates/track2-example-proposal.xlsx",
+        "data/templates/track2-preplanned-budget-sample.xlsx",
+    }:
+        import zipfile
+
+        try:
+            with zipfile.ZipFile(BytesIO(content)) as archive:
+                if sum(item.file_size for item in archive.infolist()) > 500000:
+                    return ["unexpected proposal-template size"]
+                if any(
+                    "externalLink" in name or "vbaProject" in name or "connections" in name
+                    for name in archive.namelist()
+                ):
+                    return ["proposal template contains external links or macros"]
+                value = "\n".join(
+                    archive.read(name).decode("utf-8") for name in archive.namelist() if name.endswith(".xml")
+                )
+                return (
+                    ["private or credential-shaped value in proposal template"]
+                    if SECRET.search(value) or PRIVATE.search(value)
+                    else []
+                )
+        except (ValueError, zipfile.BadZipFile, UnicodeDecodeError):
+            return ["invalid proposal workbook template"]
     issues = []
     if not allowed(path):
         issues.append("outside reviewed shareable file categories")

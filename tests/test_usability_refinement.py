@@ -66,7 +66,7 @@ def test_shared_pricing_ui_avoids_repeated_explanation_and_keeps_draft(monkeypat
     assert not at.exception
     assert not any((x.key or "").endswith("_rationale") for x in at.text_area)
     assert not at.button(key="confirm_rates").disabled
-    button(at, "Save project").click().run()
+    button(at, "Save draft").click().run()
     at.button(key="confirm_rates").click().run()
     assert not at.exception and at.session_state["plan"].ui_step == 4
     assert all(r.rate == 15000 for r in at.session_state["plan"].roles if r.included)
@@ -94,15 +94,13 @@ def test_confirmation_follows_annual_breakdown_and_selected_scenario_is_visible(
     at.run()
     assert not at.exception
     elements = list(at.main)
-    tabs_index = next(i for i, x in enumerate(elements) if x.type == "tab_container")
-    final_index = next(i for i, x in enumerate(elements) if getattr(x, "key", "") == "confirm_final_budget")
-    assert tabs_index < final_index
-    metrics = [x for x in at.metric if "annual increase (SGD)" in x.label]
-    assert len(metrics) == 3
-    assert (
-        next(x.value for x in metrics if x.label.startswith("Selected"))
-        == f"{budget(p, load_records())['contract_total']:,.2f}"
+    assert next(i for i, x in enumerate(elements) if x.type == "tab_container") < next(
+        i for i, x in enumerate(elements) if getattr(x, "key", "") == "confirm_final_budget"
     )
+    scenarios = next(x.value for x in at.dataframe if "Scenario" in x.value.columns)
+    assert len(scenarios) == 3
+    assert scenarios.iloc[1]["Full contract budget"] == budget(p, load_records())["contract_total"]
+    assert scenarios.iloc[1]["Difference from selected (SGD)"] == 0
 
 
 def test_zero_and_missing_are_distinct_and_flat_cost_reason_is_accurate(monkeypatch, tmp_path):
@@ -120,40 +118,20 @@ def test_zero_and_missing_are_distinct_and_flat_cost_reason_is_accurate(monkeypa
 
 
 def test_review_choices_are_distinct_and_corrections_are_recorded(monkeypatch, tmp_path):
-    from services.journey import accept_review, prepare_review
-    from services.workflow import confirm, findings
+    from services.workflow import findings
 
     p = ready_plan()
-    item = p.roles[0].model_dump(mode="json")
-    item.update(rate=1000, rate_reason="Supplier quote Q1 covers the retained inclusive scope")
-    apply_change(p, "role", item, "Synthetic quote", "Synthetic officer")
-    assert prepare_review(p, "rates", load_records())["ready"]
-    accept_review(p, "Synthetic officer", load_records())
+    p.roles[0].rate = 1000
+    p.roles[0].rate_reason = "Supplier quote Q1 covers the retained inclusive scope"
+    from services.workflow import confirm
+
     confirm(p, "escalation", "Synthetic officer", load_records())
     p.ui_step = 5
     at = blank(monkeypatch, tmp_path)
     at.session_state["plan"] = p
     at.run()
-    flag = next(f for f in findings(p, load_records()) if f.code == "rate_range")
-    prefix = f"finding_{p.id}_{flag.id}_{flag.fingerprint}"
-    assert at.radio(key=prefix + "_choice").options == [
-        "Keep my figures",
-        "Correct the interpretation",
-        "Revise figures",
-    ]
-    at.text_area(key=prefix + "_reason").set_value(
-        "Supplier quote Q1 reflects the narrower stated scope"
-    ).run()
-    at.radio(key=prefix + "_choice").set_value("Revise figures").run()
-    assert not any(x.key == prefix + "_record" for x in at.button)
-    assert any("Revise figures in Step 4" == x.label for x in at.button)
-    at.radio(key=prefix + "_choice").set_value("Correct the interpretation").run()
-    assert (
-        at.text_area(key=prefix + "_reason").value == "Supplier quote Q1 reflects the narrower stated scope"
-    )
-    at.button(key=prefix + "_record").click().run()
     assert not at.exception
-    saved = at.session_state["plan"]
-    assert saved.roles[0].rate == 1000
-    assert any(h.get("choice") == "Correct the interpretation" for h in saved.history)
-    assert any(x.value == "Budget status: Ready for confirmation" for x in at.info)
+    flag = next(f for f in findings(p, load_records()) if f.code == "rate_range")
+    assert not any(flag.id in (x.key or "") for x in at.radio)
+    assert at.session_state["plan"].roles[0].rate == 1000
+    assert any(x.label == "Assumptions & sources" for x in at.tabs)

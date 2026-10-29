@@ -154,27 +154,31 @@ def adjustment_factor(pricing_year, target_year, role):
 
 
 def cost_index_snapshot():
-    rows = [{
-        "Year": 2022,
-        "Annual Change": None,
-        "Cumulative Index (2022=1.000)": COST_INDEX[2022],
-        "Status": "Base year",
-        "Basis": "Administrative & Support Services total wage change (including employer CPF)",
-        "Source": MOM_WAGE_SOURCE,
-    }]
-    for year, item in MOM_WAGE_CHANGES.items():
-        rows.append({
-            "Year": year,
-            "Annual Change": item["change"],
-            "Cumulative Index (2022=1.000)": COST_INDEX[year],
-            "Status": item["status"],
-            "Basis": (
-                "MOM published annual wage change"
-                if item["status"] == "Verified"
-                else "2023–2025 mean; replace when published data is available"
-            ),
+    rows = [
+        {
+            "Year": 2022,
+            "Annual Change": None,
+            "Cumulative Index (2022=1.000)": COST_INDEX[2022],
+            "Status": "Base year",
+            "Basis": "Administrative & Support Services total wage change (including employer CPF)",
             "Source": MOM_WAGE_SOURCE,
-        })
+        }
+    ]
+    for year, item in MOM_WAGE_CHANGES.items():
+        rows.append(
+            {
+                "Year": year,
+                "Annual Change": item["change"],
+                "Cumulative Index (2022=1.000)": COST_INDEX[year],
+                "Status": item["status"],
+                "Basis": (
+                    "MOM published annual wage change"
+                    if item["status"] == "Verified"
+                    else "2023–2025 mean; replace when published data is available"
+                ),
+                "Source": MOM_WAGE_SOURCE,
+            }
+        )
     return pd.DataFrame(rows)
 
 
@@ -303,9 +307,7 @@ def synthetic_track4_tenderers(include_comparison_vendors=False):
             frame = alpha.copy(deep=True)
             for column in ("Monthly Rate (SGD)", "Annual Cost (SGD)", "Declared Total (SGD)"):
                 frame[column] = (frame[column] * factor).round(2)
-            frame["Source"] = frame["Source"].str.replace(
-                "Synthetic Current Tender", name, regex=False
-            )
+            frame["Source"] = frame["Source"].str.replace("Synthetic Current Tender", name, regex=False)
             tenderers[name] = frame
     return tenderers
 
@@ -320,6 +322,9 @@ def historical_input_fingerprint(tenderers, mappings, filters, project=None, pol
         "project": project or {},
         "policy": [] if policy_evidence is None else json.loads(policy_evidence.to_json(orient="records")),
     }
+    from services.reference_data import metadata
+
+    payload["active_reference"] = metadata()
     return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
 
 
@@ -368,6 +373,21 @@ def compare_with_history(
     target_pricing_year=None,
     policy_evidence=None,
 ):
+    if "Dataset Version" in historical.columns:
+        from services.reference_comparison import compare_prepared
+
+        return compare_prepared(
+            tenderers,
+            historical,
+            facility_type=facility_type,
+            service_category=service_category,
+            gfa_band=gfa_band,
+            pricing_year_from=pricing_year_from,
+            role_mappings=role_mappings,
+            project=project,
+            target_pricing_year=target_pricing_year,
+            policy_evidence=policy_evidence,
+        )
     if not tenderers:
         raise Track3InputError("Upload the current tender submission before comparison.")
     if historical.empty:
@@ -718,7 +738,11 @@ def generate_review_narrative(result: Track4Result, client=None, model="") -> pd
             if pct is None
             else "outside the usual total-price range"
         )
-        variance_text = f"{pct:+.1%} against the comparable tender norm" if pct is not None else "not measurable against a reliable norm"
+        variance_text = (
+            f"{pct:+.1%} against the comparable tender norm"
+            if pct is not None
+            else "not measurable against a reliable norm"
+        )
         assessments.append(
             f"{tenderer} is {variance_text} and is {reasonableness}. "
             f"This is a review signal rather than a conclusion: prioritise {roles}. Confirm scope, staffing, "
@@ -734,6 +758,8 @@ def generate_review_narrative(result: Track4Result, client=None, model="") -> pd
             }
         ]
     )
+    if "Dataset Version" in result.overall:
+        fallback = result.narrative.copy(deep=True)
     if client is None or not model:
         return fallback
     evidence = {

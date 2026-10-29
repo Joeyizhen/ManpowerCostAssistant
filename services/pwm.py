@@ -36,6 +36,10 @@ def validate_pwm(role, profile):
     c = role.pwm
     if not c:
         return
+    from services.cost_routing import route_errors
+
+    if errors := route_errors(role):
+        raise ValueError("; ".join(errors))
     from services.decision_basis import meaningful
 
     s = get_schedule(c.schedule_id)

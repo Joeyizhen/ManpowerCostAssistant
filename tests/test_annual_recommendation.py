@@ -85,14 +85,14 @@ def test_ui_range_and_exact_input_sync_and_custom_no_document(monkeypatch, tmp_p
     p = at.session_state["plan"]
     prefix = f"common_future_{p.id}"
     bm = general_reference(p, load_records(), ["fm"])
-    assert at.slider(key=prefix + "_percent").value == round(bm["average"] * 100, 2)
+    assert at.number_input(key=prefix + "_percent").value == round(bm["average"] * 100, 2)
     assert not at.text_area
-    at.number_input(key=prefix + "_exact").set_value(round(bm["minimum"] * 100, 2)).run()
+    at.number_input(key=prefix + "_percent").set_value(round(bm["minimum"] * 100, 2)).run()
     assert not at.exception
-    assert at.slider(key=prefix + "_percent").value == at.number_input(key=prefix + "_exact").value
-    at.slider(key=prefix + "_percent").set_value(round(bm["maximum"] * 100, 2)).run()
-    assert at.number_input(key=prefix + "_exact").value == round(bm["maximum"] * 100, 2)
-    at.checkbox(key=prefix + "_custom").check().run()
+    assert at.number_input(key=prefix + "_percent").value == round(bm["minimum"] * 100, 2)
+    assert at.slider(key=prefix + "_bar").value == at.number_input(key=prefix + "_percent").value
+    at.number_input(key=prefix + "_percent").set_value(round(bm["maximum"] * 100, 2)).run()
+    assert at.number_input(key=prefix + "_percent").value == round(bm["maximum"] * 100, 2)
     at.number_input(key=prefix + "_percent").set_value(8.5).run()
     at.text_area(key=prefix + "_reason").set_value("").run()
     assert not at.button(key="confirm_escalation").disabled
@@ -116,11 +116,8 @@ def test_section_order_and_no_routine_justification_or_group_correction(monkeypa
     )
     assert not any("What supports" in x.label for x in at.text_area)
     assert not any("Incomplete draft" in x.value for x in at.caption)
-    assert {x.label for x in at.metric} >= {
-        "Recommended database average",
-        "Lower allowance",
-        "Higher allowance",
-    }
+    assert any("Reference average" in x.value for x in at.markdown)
+    assert any("Lower / higher allowance" in x.value for x in at.caption)
 
 
 def test_saved_yearly_profiles_require_explicit_replacement(monkeypatch, tmp_path):
@@ -135,7 +132,7 @@ def test_saved_yearly_profiles_require_explicit_replacement(monkeypatch, tmp_pat
     assert p.roles[0].escalation == [0, 0.01, 0.04]
     at.checkbox(key=prefix + "_retain").uncheck().run()
     assert not at.exception and p.roles[0].escalation == [0, 0.01, 0.04]
-    assert any(x.key == prefix + "_percent" for x in at.slider)
+    assert any(x.key == prefix + "_percent" for x in at.number_input)
     at.checkbox(key=prefix + "_yearly_enabled").check().run()
     at.session_state[prefix + "_yearly_table_3"] = {
         "edited_rows": {0: {"Increase (%)": 2.0}, 1: {"Increase (%)": 5.0}},
@@ -190,7 +187,7 @@ def test_yearly_table_keeps_legacy_entries_and_saves_blank_as_unanswered(monkeyp
     at.run()
     assert not at.exception and at.button(key="confirm_escalation").disabled
     assert any("Year 2: enter an increase" in x.value for x in at.info)
-    button(at, "Save project").click().run()
+    button(at, "Save draft").click().run()
     stored, _ = Store(f"sqlite:///{tmp_path / 'ui.db'}").load(p.id, "local-review")
     assert stored.basis_drafts["common_future"]["yearly_values"] == [0, None]
     assert stored.roles[0].escalation == []
@@ -198,19 +195,14 @@ def test_yearly_table_keeps_legacy_entries_and_saves_blank_as_unanswered(monkeyp
 
 def test_pwm_section_is_visible_without_assigning_ordinary_fm_roles(monkeypatch, tmp_path):
     at = fresh(monkeypatch, tmp_path)
-    assert any(x.value == "### PWM salary progression" for x in at.markdown)
-    assert any("No relevant trade workers" in x.value for x in at.caption)
-    assert any(x.value == "**Applicable manpower**" for x in at.markdown)
-    assert not any(x.label in ("Affected manpower", "Review grouping") for x in at.expander)
+    assert not any(x.value == "### PWM salary progression" for x in at.markdown)
+    assert any("PWM: no covered trade roles" in x.value for x in at.caption)
+    assert any(x.label == "Applicable manpower details" for x in at.expander)
     assert not any("Workers to check" in x.label for x in at.multiselect)
-    p = at.session_state["plan"]
-    before = [r.model_dump() for r in p.roles]
-    at.button(key=f"future_edit_pwm_deployment_{p.id}").click().run()
-    assert not at.exception and at.session_state["plan"].ui_step == 1
-    assert [r.model_dump() for r in at.session_state["plan"].roles] == before
+    assert not at.session_state["plan"].roles[0].pwm
 
 
 def test_yearly_table_needs_no_separate_constant_percentage():
     p = ready_plan()
     q = general_proposal(p, [], ["fm"], None, "", "", False, "Test", yearly_percent=[0, 4.25])
-    assert q.roles[0].escalation == [0, .0425]
+    assert q.roles[0].escalation == [0, 0.0425]

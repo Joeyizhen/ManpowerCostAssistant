@@ -23,10 +23,11 @@ from services.proposals import (
     restore_copy,
     update_reviewed,
 )
+from services.reference_data import prepared
 from services.storage import ConflictError
 from services.workflow import apply_change, confirm, record_decision
 
-PROPOSAL_UI_VERSION = 2
+PROPOSAL_UI_VERSION = 6
 
 
 def digest(p):
@@ -54,8 +55,17 @@ def remember_controls(p):
         "proposal_decision_",
         "proposal_rate_",
         "t2_cov_",
+        "t2_question_",
+        "t2_correction_percent_",
+        "t2_conflict_",
+        "t2_scope_selection_",
+        "t2_method_",
     )
     saved = p.drafts.setdefault("controls", {})
+    import ui_drafts
+    from journey_inputs import pending_control_errors
+
+    ui_drafts.capture(p.plan, pending_control_errors(p.plan))
     for key in st.session_state:
         if (
             key.startswith(starts)
@@ -150,13 +160,14 @@ def profile_editor(p, current, key):
         "base_years": base,
         "option_years": option,
         "start": exact or None,
+        "start_month": seed.get("start_month", current.start_month),
         "exclusions": exclusions,
     }
     p.drafts[key] = values
     return values
 
 
-def editable_rows(rows, key):
+def editable_rows(rows, key, compact=False):
     from services.evidence import ROLES
 
     data = pd.DataFrame(
@@ -164,6 +175,7 @@ def editable_rows(rows, key):
     )
     for col in (
         "Quantity",
+        "Current quantity",
         "Monthly rate",
         "Annual increase (%)",
         "Supplied monthly total",
@@ -177,15 +189,44 @@ def editable_rows(rows, key):
         width="stretch",
         num_rows="dynamic",
         key=key,
+        disabled=["Proposed method"] if compact is True else [],
         column_config={
             "id": None,
             "Role": st.column_config.TextColumn(width="medium"),
+            **{
+                name: None
+                for name in (
+                    "Pricing basis",
+                    "Experience",
+                    "Qualifications",
+                    "Mapping",
+                    "Source location",
+                    "Supplied monthly total",
+                    "Supplied annual total",
+                    "Supplied contract total",
+                )
+                if compact
+            },
+            **(
+                {"Current quantity": None}
+                if not any(r.get("Current quantity") is not None for r in rows)
+                else {}
+            ),
             "Unit": st.column_config.SelectboxColumn(options=["unspecified", "headcount", "FTE", "posts"]),
             "Mapping": st.column_config.SelectboxColumn(options=["", *ROLES]),
             **{
                 c: st.column_config.NumberColumn(format="%.2f")
                 for c in ("Quantity", "Monthly rate", "Annual increase (%)")
             },
+            **(
+                {
+                    c: None
+                    for c in ("Annual increase (%)", "Proposed method")
+                    if not any(r.get(c) not in (None, "") for r in rows)
+                }
+                if compact == "capture"
+                else {}
+            ),
         },
     )
     clean = edited.astype(object).where(pd.notna(edited), None).to_dict("records")
@@ -194,26 +235,86 @@ def editable_rows(rows, key):
 
 
 def capture_page(p, save):
-    st.header("1. Add proposed budget")
-    st.caption("A document is optional. Supply what is known; missing inputs remain blank.")
-    values = profile_editor(p, p.plan.profile, "proposal_context_" + p.id)
-    p.name = values["name"].strip() or "Untitled proposal review"
-    p.input_profile = values
-    text = st.text_area(
-        "Paste a table or describe the proposal",
-        value=p.input_text,
-        key=retained_key("proposal_text_" + p.id),
-        placeholder="Role,Quantity,Unit,Monthly rate,Annual increase (%)\nFacility Manager,1,headcount,8000,3",
+    st.header("Upload your existing proposal")
+    st.write(
+        "We'll capture the information you already have, identify any gaps, and guide you through completing and reviewing your manpower budget."
     )
-    p.input_text = text
+    from services.proposal_intake import load_preplanned_sample, preplanned_sample_bytes, template_bytes
+
     files = st.file_uploader(
-        "Proposal documents",
+        "Upload your proposal",
         type=["csv", "xlsx", "pdf", "docx", "txt"],
         accept_multiple_files=True,
         key="proposal_files_" + p.id,
         max_upload_size=5,
     )
-    if st.button("Extract proposal for checking", key="proposal_extract_" + p.id):
+    with st.expander("Need a template or sample?"):
+        a, b = st.columns(2)
+        a.download_button(
+            "Download blank template",
+            template_bytes(),
+            file_name="track2-blank-template.xlsx",
+            key="t2_blank_template",
+        )
+        b.download_button(
+            "Download filled sample",
+            preplanned_sample_bytes(),
+            file_name="track2-preplanned-budget-sample.xlsx",
+            key="t2_preplanned_sample",
+        )
+        st.caption("The sample contains general FM roles and Cleaners. All sample inputs are illustrative.")
+        unread_upload = any(
+            hashlib.sha256(file.getvalue()).hexdigest() not in {d["sha256"] for d in p.documents}
+            for file in files
+        )
+        load_sample = st.button(
+            "Try a sample proposal",
+            key="t2_load_example",
+            disabled=unread_upload,
+            help="Read or remove the selected file before switching to a sample." if unread_upload else None,
+        )
+    if load_sample:
+        example = load_preplanned_sample()
+        dirty = bool(
+            p.original
+            or p.input_rows
+            or p.documents
+            or p.input_text.strip()
+            or p.input_profile.get("description")
+            or any(
+                p.input_profile.get(k) not in (None, "")
+                for k in ("start", "start_year", "start_month", "base_years", "option_years", "exclusions")
+            )
+            or p.input_profile.get("name") not in (None, "", "Untitled project", "Untitled proposal review")
+        )
+        if dirty:
+            st.session_state.proposal_restore_candidate = example
+            st.session_state.proposal_switch = "restore"
+        else:
+            st.session_state.proposal = example
+            st.session_state.proposal_revision = 0
+        st.rerun()
+    if p.drafts.get("example"):
+        st.info(
+            "Example proposal — invented deployment and prices. Review the captured information and make each confirmation yourself."
+        )
+    with st.expander("Enter details instead"):
+        text = st.text_area(
+            "Paste a table or describe the proposal",
+            value=p.input_text,
+            key=retained_key("proposal_text_" + p.id),
+            placeholder="Role,Quantity,Unit,Monthly rate,Annual increase (%)\nFacility Manager,1,headcount,8000,3",
+        )
+        if st.button("Enter proposal manually", key="proposal_manual_" + p.id):
+            p.drafts["manual_entry"] = True
+            st.rerun()
+    p.input_text = text
+    if st.button(
+        "Read my proposal",
+        key="proposal_extract_" + p.id,
+        type="primary",
+        disabled=not (files or p.documents or text.strip()),
+    ):
         try:
             rows, notes = interpret_text(text) if text.strip() else ([], [])
             docs = list(p.documents)
@@ -222,29 +323,105 @@ def capture_page(p, save):
                 if not any(d["sha256"] == doc["sha256"] for d in docs):
                     docs.append(doc)
             rows.extend(r for doc in docs for r in doc["rows"])
+            profiles = [d["profile"] for d in docs if d.get("profile")]
+            if profiles:
+                if any(v != profiles[0] for v in profiles[1:]):
+                    raise ValueError(
+                        "Uploaded project contexts conflict. Extract one proposal at a time or correct the context before confirming."
+                    )
+                p.input_profile = profiles[0]
+                p.drafts["proposal_context_" + p.id] = profiles[0]
+                p.drafts["context_reset"] = True
             p.documents, p.input_rows = docs, rows
             p.drafts["original_editor_seed"] = rows
             p.drafts["extraction_notes"] = notes
             p.drafts["extract_epoch"] = p.drafts.get("extract_epoch", 0) + 1
             st.rerun()
+        except ValueError as error:
+            st.error(str(error))
         except Exception:
             st.error(
                 "This document could not be read reliably. Your draft is retained; use a text-readable PDF, XLSX, CSV, DOCX or enter the proposal table manually."
             )
+    started = bool(
+        p.input_rows
+        or p.documents
+        or p.drafts.get("manual_entry")
+        or p.drafts.get("original_editor_seed")
+        or p.input_profile.get("description")
+        or any(
+            p.input_profile.get(k) not in (None, "")
+            for k in ("start", "start_year", "base_years", "option_years")
+        )
+    )
+    if not started:
+        return
+    st.subheader("Check what we captured")
+    st.caption("Check the supplied information below. We'll guide you through any missing details next.")
+    if p.drafts.pop("context_reset", False):
+        for field in ("name", "brief", "year", "base", "option", "start", "exclusions"):
+            st.session_state.pop("proposal_context_" + p.id + "_" + field, None)
+    with st.expander(
+        "Project details — check or complete", expanded=not bool(p.input_profile.get("description"))
+    ):
+        values = profile_editor(p, p.plan.profile, "proposal_context_" + p.id)
+    p.name = values["name"].strip() or "Untitled proposal review"
+    p.input_profile = values
+    context = [p.name]
+    if start := values.get("start") or values.get("start_year"):
+        context.append("Start: " + str(start))
+    if values.get("base_years") is not None and values.get("option_years") is not None:
+        context.append(f"{values['base_years']} base + {values['option_years']} option years")
+    st.caption(" · ".join(context))
     for note in [
         *p.drafts.get("extraction_notes", []),
         *(d["extraction_note"] for d in p.documents if d["extraction_note"]),
     ]:
         st.caption(note)
-    st.markdown("**Confirm the interpreted proposal**")
+    st.markdown("**Your proposed manpower**")
     st.caption(
         "Keep original seniority and combined titles. Units must say headcount or FTE. Amounts are SGD; leave unknown rates/increases blank. Zero quantity explicitly excludes a role."
     )
     p.input_rows = editable_rows(
         p.drafts.setdefault("original_editor_seed", p.input_rows),
         f"proposal_original_rows_{p.id}_{p.drafts.get('extract_epoch', 0)}",
+        compact="capture",
     )
+    missing = []
+    if not values.get("description"):
+        missing.append("project brief")
+    if not (values.get("start") or values.get("start_year")):
+        missing.append("contract start")
+    if values.get("base_years") is None or values.get("option_years") is None:
+        missing.append("contract duration")
+    for field, label in [("Quantity", "quantity"), ("Monthly rate", "monthly charge")]:
+        names = [r["Role"] for r in p.input_rows if r.get("Quantity") != 0 and r.get(field) is None]
+        if names:
+            missing.append(label + " for " + ", ".join(names))
+    if missing:
+        st.info("To complete during review: " + "; ".join(missing) + ".")
     quoted = [r for r in p.input_rows if r.get("Yearly rates")]
+    supplied_assumptions = [a for d in p.documents for a in d.get("assumptions", [])]
+    if supplied_assumptions:
+        st.markdown("**Supplied future assumptions**")
+        st.dataframe(
+            [
+                {
+                    "Roles / group": a["target"],
+                    "Proposed method": a["method"],
+                    "Annual increase (%)": "" if a["percent"] is None else f"{a['percent']:g}",
+                    "Yearly increases (%)": ", ".join(str(v) for v in a.get("yearly_increases") or []),
+                    "Yearly monthly prices": ", ".join(str(v) for v in a.get("yearly_rates") or []),
+                    "Notes / document reference": a.get("note", ""),
+                }
+                for a in supplied_assumptions
+            ],
+            hide_index=True,
+            width="stretch",
+        )
+        st.caption(
+            "These are the future assumptions supplied in your proposal. They remain available for review."
+        )
     if quoted:
         st.caption(
             "Year-specific quoted monthly prices were identified. Inspect these against the source; the engine does not add a second general increase to full quoted prices."
@@ -257,12 +434,13 @@ def capture_page(p, save):
             hide_index=True,
             width="stretch",
         )
-    total = st.number_input(
-        "Supplied full-contract EPV, if stated (SGD)",
-        value=p.claimed_total,
-        min_value=0.0,
-        key=retained_key("proposal_total_" + p.id),
-    )
+    with st.expander("Full-contract total supplied, if available"):
+        total = st.number_input(
+            "Full-contract total stated in the proposal (SGD)",
+            value=p.claimed_total,
+            min_value=0.0,
+            key=retained_key("proposal_total_" + p.id),
+        )
     p.claimed_total = total
     inclusive = st.checkbox(
         "The rate column represents inclusive monthly manpower charges per head/FTE, not salary alone",
@@ -273,7 +451,7 @@ def capture_page(p, save):
         key=retained_key("proposal_interpret_" + p.id),
     )
     if st.button(
-        "Confirm captured proposal and continue",
+        "Confirm and continue",
         disabled=not (inclusive and accurate),
         key="proposal_capture_" + p.id,
         type="primary",
@@ -294,6 +472,7 @@ def current_rows(p):
             "id": r.id,
             "Role": r.label,
             "Quantity": r.quantity if r.included else 0,
+            "Current quantity": r.current_quantity,
             "Unit": r.quantity_unit,
             "Monthly rate": r.rate,
             "Pricing basis": r.rate_reason,
@@ -642,6 +821,7 @@ def unapplied_figures(p):
             "id",
             "Role",
             "Quantity",
+            "Current quantity",
             "Unit",
             "Monthly rate",
             "Pricing basis",
@@ -660,11 +840,9 @@ def unapplied_figures(p):
 
 
 def pending_rate(p):
-    return any(
-        p.drafts.get("controls", {}).get(f"proposal_rate_{p.id}_{r.id}_{p.plan.version}_exact", r.rate)
-        != r.rate
-        for r in p.plan.roles
-    )
+    from services.proposal_legacy import pending
+
+    return pending(p)
 
 
 def rate_controls(p, records, officer):
@@ -682,7 +860,12 @@ def rate_controls(p, records, officer):
         return
     role = next(r for r in roles if r.id == rid)
     bm = rate_benchmark(
-        records, role.mapped_role, role.benchmark_year, role.benchmark_status, role.benchmark_scope
+        records,
+        role.mapped_role,
+        role.benchmark_year,
+        role.benchmark_status,
+        role.benchmark_scope,
+        quantity_unit=role.quantity_unit,
     )
     prefix = f"proposal_rate_{p.id}_{rid}_{p.plan.version}"
 
@@ -711,7 +894,9 @@ def rate_controls(p, records, officer):
             unsafe_allow_html=True,
         )
         st.caption(
-            f"Observed minimum {low:,.2f} · average {bm['average']:,.2f} · maximum {high:,.2f} · {bm['sample_count']} schedules; reference year {role.benchmark_year}."
+            f"Source contract-year 1: minimum {low:,.2f} · average {bm['average']:,.2f} · maximum {high:,.2f} · {bm['sample_count']} submissions. Actual calendar year and source count/allocation basis unconfirmed."
+            if bm.get("reference_kind") == "prepared quotation"
+            else f"Observed minimum {low:,.2f} · average {bm['average']:,.2f} · maximum {high:,.2f} · {bm['sample_count']} schedules; reference year {role.benchmark_year}."
         )
     exact = st.number_input(
         "Exact proposed monthly rate (SGD)",
@@ -749,12 +934,19 @@ def rate_controls(p, records, officer):
                 return
             item = role.model_copy(deep=True)
             item.rate = exact
-            item.rate_reason = (
-                basis
-                or f"Officer selected inclusive monthly allowance within the eligible tender reference range for {role.benchmark_year}; demonstration comparison, not a verified market price."
+            item.rate_reason = basis or (
+                "Officer selected a conditional contract-year 1 source quotation allowance; actual calendar year, source units and inclusions remain unverified. No time normalisation."
+                if prepared(records)
+                else f"Officer selected inclusive monthly allowance within the eligible tender reference range for {role.benchmark_year}; demonstration comparison, not a verified market price."
             )
             item.rate_origin = (
-                "Synthetic benchmark selection" if supported and not basis else "Officer assumption"
+                (
+                    "Prepared reference selection"
+                    if bm.get("reference_kind") == "prepared quotation"
+                    else "Synthetic benchmark selection"
+                )
+                if supported and not basis
+                else "Officer assumption"
             )
             apply_change(
                 p.plan, "role", item.model_dump(mode="json"), "Officer applied a reviewed rate", officer
@@ -818,7 +1010,11 @@ def check_page(p, records, officer, cfg):
         year_gaps = [
             r
             for r in p.plan.roles
-            if r.included and r.benchmark_year and target_year and r.benchmark_year != target_year
+            if not prepared(records)
+            and r.included
+            and r.benchmark_year
+            and target_year
+            and r.benchmark_year != target_year
         ]
         if year_gaps:
             st.caption(
@@ -1025,6 +1221,13 @@ def result_page(p, records, officer, save):
     st.header("3. Your reviewed manpower budget")
     state, c = assessment(p, records), comparison(p, records)
     result = c["reviewed"]
+    from journey_inputs import pending_control_errors
+
+    pending_edits = pending_control_errors(p.plan)
+    if pending_edits:
+        st.info(
+            "Unapplied edits are not included in these totals: " + "; ".join(dict.fromkeys(pending_edits))
+        )
     reviewed_ready = (
         all(
             gate in p.plan.confirmations
@@ -1036,11 +1239,11 @@ def result_page(p, records, officer, save):
                 "rates",
                 "base",
                 "escalation",
-                "validation",
             )
         )
         and not unapplied_figures(p)
         and not pending_rate(p)
+        and not pending_edits
     )
     if not reviewed_ready:
         st.info(
@@ -1049,27 +1252,16 @@ def result_page(p, records, officer, save):
     if result is None:
         st.error("The reviewed calculation needs correction. Return to Check figures and assumptions.")
         return
-    confirmed = "final" in p.plan.confirmations and not state["blockers"] and not state["unresolved"]
+    confirmed = (
+        "final" in p.plan.confirmations
+        and not state["blockers"]
+        and not state["unresolved"]
+        and not pending_edits
+    )
     st.info("Confirmed reviewed budget" if confirmed else "Draft reviewed budget - not yet approved")
-    a, b, d = st.columns(3)
-    a.metric(
-        "Original recalculated EPV (SGD)",
-        f"{c['original']['contract_total']:,.2f}" if c["original"] else "Incomplete original",
-    )
-    b.metric("Reviewed full contract EPV (SGD)", f"{result['contract_total']:,.2f}")
-    d.metric(
-        "Change from original calculation (SGD)",
-        f"{c['difference']:+,.2f}" if c["difference"] is not None else "Unavailable",
-    )
-    if c["percent"] is not None:
-        st.caption(f"Difference: {c['percent']:+.2f}%. A percentage alone does not establish reasonableness.")
-    if p.original_claimed_total is not None:
-        st.caption(
-            f"Original supplied EPV: SGD {p.original_claimed_total:,.2f}; retained separately from recalculated totals."
-        )
-    st.caption(
-        f"Base period: {p.plan.profile.base_years} years, SGD {result['base_total']:,.2f}. Option: {p.plan.profile.option_years} years, SGD {result['option_total']:,.2f}."
-    )
+    from review_inputs import budget_totals
+
+    budget_totals(p.plan, result)
     profiles = {
         tuple(r.escalation)
         for r in p.plan.roles
@@ -1088,28 +1280,12 @@ def result_page(p, records, officer, save):
     if source_summary(p.plan, records)[2]:
         st.caption("Demo reference data — replace with validated tender data before operational use.")
     tabs = st.tabs(
-        ["Budget", "Scenarios", "Manpower", "Assumptions & sources"],
+        ["Budget", "Scenarios", "Manpower", "Assumptions & sources", "Changes from your original proposal"],
         key="proposal_results_tab_" + p.id,
         on_change="rerun",
     )
     with tabs[0]:
         annual_review(p.plan, result)
-        st.markdown("**Original vs reviewed**")
-        st.dataframe(
-            comparison_rows(p, records),
-            hide_index=True,
-            width="stretch",
-            column_config={
-                name: st.column_config.NumberColumn(name, format="%.2f")
-                for name in (
-                    "Original rate",
-                    "Reviewed rate",
-                    "Original contract cost",
-                    "Reviewed contract cost",
-                    "Cost difference (SGD)",
-                )
-            },
-        )
     with tabs[1]:
         sensitivity_review(p.plan, records + p.quote_records, on_edit=lambda: _set_stage(1))
     with tabs[2]:
@@ -1134,6 +1310,27 @@ def result_page(p, records, officer, save):
         st.caption(
             "The original uploaded bytes, extracted rows and original claimed totals are preserved in the proposal snapshot. Accepted revisions do not overwrite them."
         )
+    with tabs[4]:
+        if c.get("original_unavailable_reason"):
+            st.info(c["original_unavailable_reason"])
+        elif c["difference"] is not None:
+            st.metric("Change from original proposal (SGD)", f"{c['difference']:+,.2f}")
+        st.markdown("**Original vs reviewed**")
+        st.dataframe(
+            comparison_rows(p, records),
+            hide_index=True,
+            width="stretch",
+            column_config={
+                name: st.column_config.NumberColumn(name, format="%.2f")
+                for name in (
+                    "Original rate",
+                    "Reviewed rate",
+                    "Original contract cost",
+                    "Reviewed contract cost",
+                    "Cost difference (SGD)",
+                )
+            },
+        )
     st.divider()
     st.caption("Confirmed exports" if confirmed else "Draft exports - no approval is implied")
     st.download_button(
@@ -1141,6 +1338,7 @@ def result_page(p, records, officer, save):
         workbook(p, records),
         file_name=f"proposal-{'confirmed' if confirmed else 'draft'}-v{p.plan.version}.xlsx",
         key="proposal_workbook_" + p.id,
+        disabled=bool(pending_edits),
     )
     st.download_button(
         "Download management review report",
@@ -1148,6 +1346,7 @@ def result_page(p, records, officer, save):
         file_name="manpower-proposal-review.html",
         mime="text/html",
         key="proposal_report_" + p.id,
+        disabled=bool(pending_edits),
     )
     if state["blockers"] or state["unresolved"]:
         st.caption(
@@ -1168,6 +1367,8 @@ def result_page(p, records, officer, save):
         type="primary",
     ):
         try:
+            if "validation" not in p.plan.confirmations:
+                confirm(p.plan, "validation", officer, records + p.quote_records)
             confirm(p.plan, "final", officer, records + p.quote_records)
             save()
             st.rerun()
@@ -1183,9 +1384,15 @@ def render(cfg, store, owner):
     st.session_state.setdefault("proposal", Proposal())
     st.session_state.setdefault("proposal_revision", 0)
     p = st.session_state.proposal = Proposal.model_validate(st.session_state.proposal.model_dump(mode="json"))
+    from services.proposal_legacy import prepare
+
+    prepare(p)
     for key, value in p.drafts.get("controls", {}).items():
         if key not in st.session_state:
             st.session_state[key] = value
+    import ui_drafts
+
+    ui_drafts.restore(p.plan)
     remember_controls(p)
     officer = st.session_state.get("officer", "") or "Local reviewing officer"
     records = load_records()
@@ -1247,8 +1454,12 @@ def render(cfg, store, owner):
             st.rerun()
         if discard or keep:
             st.session_state.proposal_switch_action = "discard" if discard else "save"
-    if p.stage != 2:
+    if p.stage == 1:
         st.title("Review and improve a proposed manpower budget")
+    if p.drafts.get("example") and p.stage != 0:
+        st.caption(
+            "Example proposal — invented inputs for demonstration. Officer reviews and confirmations remain required."
+        )
     steps = ["Add proposed budget", "Check figures and assumptions", "View reviewed budget"]
     if p.original:
         selected_stage = st.radio(
@@ -1261,11 +1472,16 @@ def render(cfg, store, owner):
         )
         if selected_stage != p.stage:
             p.stage = selected_stage
+            from services.proposal_workflow import next_decision
+
+            p.plan.ui_step = (next_decision(p) if next_decision(p) != 5 else 1) if selected_stage == 1 else 5
             st.rerun()
     if p.stage == 0:
         capture_page(p, save)
     elif p.stage == 1:
-        check_page(p, records, officer, cfg)
+        from proposal_journey import render as shared_proposal_journey
+
+        shared_proposal_journey(p, records, officer, cfg, save)
     else:
         result_page(p, records, officer, save)
     if st.session_state.pop("proposal_save_requested", False):
@@ -1290,6 +1506,7 @@ def render(cfg, store, owner):
         new.drafts["original_editor_seed"] = new.input_rows
         if new.drafts.get("review_rows"):
             new.drafts[f"review_editor_seed_{new.plan.version}"] = new.drafts["review_rows"]
+            new.drafts[f"shared_rows_{new.plan.version}"] = new.drafts["review_rows"]
         new.drafts["editor_epoch"] = new.drafts.get("editor_epoch", 0) + 1
         st.session_state.proposal, st.session_state.proposal_revision = new, revision
         st.session_state.proposal_saved_hash = digest(new) if revision else ""

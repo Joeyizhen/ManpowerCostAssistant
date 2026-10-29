@@ -17,21 +17,43 @@ def starting_overview(plan):
 
 
 def reference(plan, role, records):
-    return rate_benchmark(
-        records, role.mapped_role, role.benchmark_year, role.benchmark_status, role.benchmark_scope
+    result = rate_benchmark(
+        records,
+        role.mapped_role,
+        role.benchmark_year,
+        role.benchmark_status,
+        role.benchmark_scope,
+        quantity_unit=role.quantity_unit,
     )
+    if result.get("reference_kind") == "prepared quotation":
+        # The selection certifies title equivalence, not hours, allocation or an
+        # inclusive headcount/FTE denominator. Do not infer these from quantity.
+        result = {
+            **result,
+            "recommendation_supported": False,
+            "typical_supported": False,
+            "comparability_rule": "pricing-comparability-v1: a recommendation requires a verified matching pricing denominator, deployment basis and inclusions. The prepared selection does not establish these fields.",
+            "comparability_note": "Source units, shared deployment and inclusions are unresolved. The quoted average is context, not a recommended rate per person or FTE.",
+        }
+    else:
+        result = {
+            **result,
+            "recommendation_supported": result["available"],
+            "typical_supported": result["available"],
+        }
+    return result
 
 
 def custom_rate(role, benchmark):
     return (
-        not benchmark["available"]
+        not benchmark.get("recommendation_supported", benchmark["available"])
         or role.rate is None
         or abs(role.rate - round(benchmark["average"], 2)) > 0.005
     )
 
 
 def needs_pricing_basis(role, benchmark):
-    return not benchmark["available"] or (
+    return not benchmark.get("recommendation_supported", benchmark["available"]) or (
         role.rate is not None
         and not round(benchmark["minimum"], 2) <= role.rate <= round(benchmark["maximum"], 2)
     )
@@ -106,10 +128,15 @@ def pricing_proposal(plan, records, officer):
                 continue
             reason = f"Officer-selected allowance of SGD {role.rate:,.2f} within the observed comparable range SGD {bm['minimum']:,.2f}-{bm['maximum']:,.2f}; historical reference records retained automatically. This is a budgeting choice, not a verified supplier quotation."
         if not custom:
-            reason = f"Comparable database arithmetic average from {bm['sample_count']} distinct inclusive manpower schedules, priced in {role.benchmark_year}; selected for the starting allowance."
+            reason = (
+                f"Conditional contract-year 1 quote reference across {bm['sample_count']} distinct submissions; equal submission weighting. Actual calendar pricing year, source count/allocation basis and inclusions remain unverified. Officer-selected starting allowance; no time normalisation."
+                if bm.get("reference_kind") == "prepared quotation"
+                else f"Comparable database arithmetic average from {bm['sample_count']} distinct inclusive manpower schedules, priced in {role.benchmark_year}; selected for the starting allowance."
+            )
         pricing_reason = reason
         mismatch = (
-            role.benchmark_year
+            bm.get("reference_kind") != "prepared quotation"
+            and role.benchmark_year
             and candidate.profile.costing_start
             and role.benchmark_year != candidate.profile.costing_start.year
         )
@@ -153,14 +180,27 @@ def pricing_proposal(plan, records, officer):
         )
         candidate.decision_bases[-1].snapshots[role.id].update(
             reference_records=bm["records"],
+            reference_dataset=bm.get("dataset_id", "synthetic-fixture-v1"),
+            reference_method=bm["method"],
+            reference_limitations=bm["limitations"],
+            reference_comparability=bm.get("comparability_rule", "Validated fixture unit/scope match"),
+            reference_recommendation_supported=bm.get("recommendation_supported", bm["available"]),
             quotation_reference=source,
-            year_treatment=treatment if mismatch else "Same reference and contract-start year",
+            year_treatment=(
+                bm["alignment"]
+                if bm.get("reference_kind") == "prepared quotation"
+                else treatment
+                if mismatch
+                else "Same reference and contract-start year"
+            ),
             rate_selection="Officer-selected allowance" if custom else "Database arithmetic average",
             pricing_rationale=pricing_reason,
             shared_pricing_roles=[r.id for r in plan.roles if shared_pricing_applies(plan, r)]
             if shared_override
             else [],
         )
+        if band := candidate.basis_drafts.get("illustrative_rate_bands", {}).get(role.id):
+            candidate.decision_bases[-1].snapshots[role.id]["illustrative_planning_range"] = band
     candidate.basis_drafts.pop("pricing_year", None)
     candidate.basis_drafts.pop("pricing_sources", None)
     candidate.basis_drafts.pop("rate", None)

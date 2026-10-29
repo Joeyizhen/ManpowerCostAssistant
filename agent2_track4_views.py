@@ -62,6 +62,8 @@ SERVICE_OPTIONS = [
 
 
 def _initialise():
+    from services.reference_data import historical_frame, metadata
+
     defaults = {
         "track4_step": 1,
         "track4_project": {},
@@ -80,6 +82,20 @@ def _initialise():
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
+    current = metadata()["dataset_id"]
+    if current != "synthetic-fixture-v1":
+        previous = st.session_state.track4_history
+        versions = (
+            set(previous["Dataset Version"].dropna())
+            if previous is not None and "Dataset Version" in previous
+            else set()
+        )
+        if versions != {current}:
+            st.session_state.track4_history = historical_frame()
+            st.session_state.track4_policy_evidence = pd.DataFrame()
+    elif st.session_state.track4_history is not None and "Dataset Version" in st.session_state.track4_history:
+        st.session_state.track4_history = load_synthetic_history()
+        st.session_state.track4_policy_evidence = policy_evidence_snapshot()
     # The comparison database belongs to the assistant; users only upload the
     # tender that they want reviewed.
     if st.session_state.track4_history is None:
@@ -182,6 +198,8 @@ def _money(value):
 
 
 def _position_label(variance):
+    if pd.isna(variance):
+        return "Insufficient comparable data", "#526277"
     value = float(variance)
     if value >= 0.15:
         return "🔴 Much higher than usual", "#c0392b"
@@ -191,7 +209,7 @@ def _position_label(variance):
         return "🔴 Much lower than usual", "#c0392b"
     if value <= -0.05:
         return "🟠 Lower than usual", "#d97706"
-    return "🟢 Within the acceptable benchmark range", "#16835b"
+    return "🟢 Within the comparison range", "#16835b"
 
 
 def _overall_visual(overall):
@@ -203,6 +221,12 @@ def _overall_visual(overall):
     )
     row = overall[overall["Tenderer"] == selected].iloc[0]
     submitted = float(row["Submitted Total Cost (SGD)"])
+    if pd.isna(row["Adjusted Historical Expected Total (SGD)"]):
+        st.metric("Your submitted price", _money(submitted))
+        st.info(
+            "Insufficient comparable data for a full reference total. Submitted figures are unchanged; no zero benchmark is substituted."
+        )
+        return selected
     norm = float(row["Adjusted Historical Expected Total (SGD)"])
     low = float(row["Adjusted Typical Range Low (SGD)"])
     high = float(row["Adjusted Typical Range High (SGD)"])
@@ -225,7 +249,7 @@ def _overall_visual(overall):
   <div style="font-size:1.05rem;font-weight:750;margin-bottom:6px;">Where {selected} stands</div>
   <div style="color:#5d6b7e;margin-bottom:18px;">One scale showing your tender against comparable past submissions</div>
   <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:.82rem;color:#526277;margin-bottom:34px;">
-    <span><span style="display:inline-block;width:24px;height:10px;border-radius:5px;background:#b9e6ce;margin-right:7px;"></span>Acceptable comparison range</span>
+    <span><span style="display:inline-block;width:24px;height:10px;border-radius:5px;background:#b9e6ce;margin-right:7px;"></span>Conditional source interquartile range</span>
     <span><span style="display:inline-block;height:14px;border-left:3px dashed #147D74;margin:0 9px -2px 3px;"></span>Historical midpoint</span>
     <span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:{color};margin-right:7px;"></span>Your submitted tender</span>
   </div>
@@ -274,6 +298,11 @@ def _overall_visual(overall):
 
 def _render_overall_assessment(result, tenderer):
     overall = result.overall[result.overall["Tenderer"] == tenderer].iloc[0]
+    if "Dataset Version" in overall:
+        st.markdown("#### Overall assessment")
+        st.write(overall["Overall Interpretation"])
+        st.caption(overall["Important Limitation"])
+        return
     variance = float(overall["Total Variance (%)"])
     status, _ = _position_label(variance)
     findings = result.findings[result.findings["Tenderer"] == tenderer]
@@ -318,7 +347,14 @@ def _priority_style(frame):
 def render_agent2_track4(cfg=None):
     _initialise()
     st.title("Compare tenderer proposals")
-    st.caption(SYNTHETIC_LABEL)
+    from services.reference_data import active_snapshot
+
+    prepared_active = active_snapshot() is not None
+    st.caption(
+        "Prepared source quotations; synthetic calendar dates, unknown award outcomes and unconfirmed allocation units."
+        if prepared_active
+        else SYNTHETIC_LABEL
+    )
     st.write(
         "Upload a tender proposal to see whether its pricing is in line with comparable past submissions, what needs attention and what to clarify."
     )
@@ -547,17 +583,26 @@ def render_agent2_track4(cfg=None):
             else 0,
             key=retained_key("navigation_agent2_track4_views_485"),
         )
-        year_from = c3.number_input(
-            "Use submissions from",
-            2020,
-            2035,
-            int(old.get("Pricing Year From", 2022)),
-            key=retained_key("navigation_agent2_track4_views_491"),
-        )
+        if prepared_active:
+            year_from = None
+            c3.caption(
+                "Calendar pricing years unavailable. Source contract-year quotes only; no time adjustment."
+            )
+            st.caption(
+                "Facility/service metadata are unknown in the prepared selection. A restrictive context filter may leave no comparable evidence; it is never broadened automatically."
+            )
+        else:
+            year_from = c3.number_input(
+                "Use submissions from",
+                2020,
+                2035,
+                int(old.get("Pricing Year From", 2022)),
+                key=retained_key("navigation_agent2_track4_views_491"),
+            )
         filters = {
             "Facility Type": facility,
             "Service Category": service,
-            "Pricing Year From": int(year_from),
+            "Pricing Year From": int(year_from) if year_from is not None else None,
         }
         st.session_state.track4_filters = filters
         st.caption(
@@ -575,7 +620,7 @@ def render_agent2_track4(cfg=None):
                     facility_type=facility,
                     service_category=service,
                     gfa_band="Any",
-                    pricing_year_from=int(year_from),
+                    pricing_year_from=int(year_from) if year_from is not None else None,
                     role_mappings=mapping_dict,
                     project=st.session_state.track4_project,
                     target_pricing_year=st.session_state.track4_project.get("pricing_year"),
@@ -601,7 +646,11 @@ def render_agent2_track4(cfg=None):
             st.session_state.track4_step = 4
             st.rerun()
         st.header("Your tender pricing review")
-        st.warning(SYNTHETIC_LABEL)
+        st.caption(
+            "Conditional source quote comparison; no calendar or wage-index normalisation."
+            if prepared_active
+            else SYNTHETIC_LABEL
+        )
         st.write("Start with the overall position, then work through only the items that need attention.")
         overall_tab, attention_tab, roles_tab, policy_tab, questions_tab, evidence_tab = st.tabs(
             [
@@ -623,14 +672,14 @@ def render_agent2_track4(cfg=None):
             configured = cfg or settings()
             if configured.api_key and configured.model:
                 if st.button("Explain these results with AI"):
-                    with st.spinner("Explaining the verified calculations and cited policy evidence…"):
+                    with st.spinner("Explaining the recorded calculations and cited evidence…"):
                         result.narrative = generate_review_narrative(
                             result, create_client(configured.api_key), configured.model
                         )
                     st.rerun()
             else:
                 st.caption(
-                    "Connect OpenAI to assess the main role, scope and quantity drivers using the verified calculations and policy sources."
+                    "Connect OpenAI to assess the main role, scope and quantity drivers using the recorded calculations and reference limitations."
                 )
         with attention_tab:
             st.subheader("Items to review")
@@ -677,7 +726,7 @@ def render_agent2_track4(cfg=None):
                             f"**{item['Tenderer']} · {item['Standard Role']}**  \n{item['Finding Category']}"
                         )
                         amount.markdown(
-                            f"<div style='text-align:right;font-size:1.2rem;font-weight:800;color:{variance_color}'>{variance:+.1%}</div>",
+                            f"<div style='text-align:right;font-size:1.2rem;font-weight:800;color:{variance_color}'>{format(variance, '+.1%') if pd.notna(variance) else 'Unavailable'}</div>",
                             unsafe_allow_html=True,
                         )
                         st.markdown(f"**Why it matters**  \n{item['What the Comparison Means']}")
@@ -703,7 +752,7 @@ def render_agent2_track4(cfg=None):
         with roles_tab:
             st.subheader("Role-by-role pricing at a glance")
             st.caption(
-                "The norm is the middle price from comparable past submissions, restated to the tender year."
+                "Prepared source median; actual calendar pricing year unknown. No time adjustment." if "Dataset Version" in result.comparisons else "The norm is the middle price from comparable past submissions, restated to the tender year."
             )
             tenderer = st.selectbox(
                 "Submitted proposal",
@@ -755,7 +804,7 @@ def render_agent2_track4(cfg=None):
                 f"""
 <div style="font-size:.88rem;color:#435166;margin-bottom:6px;">Difference</div>
 <div style="display:inline-block;padding:7px 12px;border-radius:9px;background:{role_color}18;color:{role_color};font-size:1.7rem;font-weight:800;line-height:1.1;">
-  {role["Difference from norm"]:+.1%}
+  {format(role["Difference from norm"], "+.1%") if pd.notna(role["Difference from norm"]) else "Unavailable"}
 </div>
                 """,
                 unsafe_allow_html=True,
@@ -818,66 +867,74 @@ def render_agent2_track4(cfg=None):
                 result.questions = pd.DataFrame(edited_rows).reset_index(drop=True)
         with evidence_tab:
             st.subheader("How the comparison is calculated")
-            st.write("Five transparent steps turn past submission records into an officer-ready review.")
-            steps = [
-                (
-                    "1",
-                    "Match the role",
-                    "Standardise the submitted role and pricing unit so like is compared with like.",
-                ),
-                (
-                    "2",
-                    "Select comparable records",
-                    "Use similar service, facility and submission years chosen in Comparison Setup.",
-                ),
-                (
-                    "3",
-                    "Restate older prices",
-                    "Chain MOM Administrative & Support Services wage changes to convert earlier prices into tender-year equivalents.",
-                ),
-                (
-                    "4",
-                    "Find the norm",
-                    "Use the middle comparable price as the norm and the middle 50% as the usual range.",
-                ),
-                (
-                    "5",
-                    "Flag action",
-                    "Translate material differences or limited evidence into a priority and clarification question.",
-                ),
-            ]
-            for row_start in (0, 3):
-                columns = st.columns(3)
-                for column, (number, title, description) in zip(
-                    columns, steps[row_start : row_start + 3], strict=False
-                ):
-                    with column.container(border=True):
-                        st.markdown(
-                            f"<div style='font-size:2rem;font-weight:800;color:#147D74'>{number}</div>",
-                            unsafe_allow_html=True,
-                        )
-                        st.markdown(f"**{title}**")
-                        st.write(description)
-            example_adjusted = 5000 * COST_INDEX[2026] / COST_INDEX[2022]
-            st.info(
-                f"Example: a 2022 monthly rate of SGD 5,000 becomes SGD {example_adjusted:,.0f} in 2026 because "
-                f"5,000 × ({COST_INDEX[2026]:.4f} ÷ {COST_INDEX[2022]:.4f}) = {example_adjusted:,.0f}. "
-                "The 2023–2025 steps use published MOM wage changes. The 2026 step is visibly marked as a scenario pending an approved full-year value."
-            )
-            st.warning(
-                "We do not add a blanket policy surcharge. Instead, we check that any applicable PWM minimum wage is met. We also avoid counting employer CPF twice because it is already included in MOM's wage-change figures."
-            )
-            with st.expander("See the governed wage-index series", expanded=True):
-                st.dataframe(
-                    cost_index_snapshot(),
-                    hide_index=True,
-                    width="stretch",
-                    column_config={
-                        "Annual Change": st.column_config.NumberColumn(format="%.1f%%"),
-                        "Cumulative Index (2022=1.000)": st.column_config.NumberColumn(format="%.4f"),
-                        "Source": st.column_config.LinkColumn(display_text="Open MOM source ↗"),
-                    },
+            if prepared_active:
+                st.write(
+                    "Source contract-year 1 quotations are screened with the same role, origin and sample rules as budgeting. Each submission has equal weight. Calendar dates, wage-index adjustments and award status are not inferred."
                 )
+                st.caption(
+                    "The midpoint and quartiles use submission-level representative quotations. Full reference totals require comparable evidence for every included role. Source count/allocation and inclusions still require alignment."
+                )
+            else:
+                st.write("Five transparent steps turn past submission records into an officer-ready review.")
+                steps = [
+                    (
+                        "1",
+                        "Match the role",
+                        "Standardise the submitted role and pricing unit so like is compared with like.",
+                    ),
+                    (
+                        "2",
+                        "Select comparable records",
+                        "Use similar service, facility and submission years chosen in Comparison Setup.",
+                    ),
+                    (
+                        "3",
+                        "Restate older prices",
+                        "Chain MOM Administrative & Support Services wage changes to convert earlier prices into tender-year equivalents.",
+                    ),
+                    (
+                        "4",
+                        "Find the norm",
+                        "Use the middle comparable price as the norm and the middle 50% as the usual range.",
+                    ),
+                    (
+                        "5",
+                        "Flag action",
+                        "Translate material differences or limited evidence into a priority and clarification question.",
+                    ),
+                ]
+                for row_start in (0, 3):
+                    columns = st.columns(3)
+                    for column, (number, title, description) in zip(
+                        columns, steps[row_start : row_start + 3], strict=False
+                    ):
+                        with column.container(border=True):
+                            st.markdown(
+                                f"<div style='font-size:2rem;font-weight:800;color:#147D74'>{number}</div>",
+                                unsafe_allow_html=True,
+                            )
+                            st.markdown(f"**{title}**")
+                            st.write(description)
+                example_adjusted = 5000 * COST_INDEX[2026] / COST_INDEX[2022]
+                st.info(
+                    f"Example: a 2022 monthly rate of SGD 5,000 becomes SGD {example_adjusted:,.0f} in 2026 because "
+                    f"5,000 × ({COST_INDEX[2026]:.4f} ÷ {COST_INDEX[2022]:.4f}) = {example_adjusted:,.0f}. "
+                    "The 2023–2025 steps use published MOM wage changes. The 2026 step is visibly marked as a scenario pending an approved full-year value."
+                )
+                st.warning(
+                    "We do not add a blanket policy surcharge. Instead, we check that any applicable PWM minimum wage is met. We also avoid counting employer CPF twice because it is already included in MOM's wage-change figures."
+                )
+                with st.expander("See the governed wage-index series", expanded=True):
+                    st.dataframe(
+                        cost_index_snapshot(),
+                        hide_index=True,
+                        width="stretch",
+                        column_config={
+                            "Annual Change": st.column_config.NumberColumn(format="%.1f%%"),
+                            "Cumulative Index (2022=1.000)": st.column_config.NumberColumn(format="%.4f"),
+                            "Source": st.column_config.LinkColumn(display_text="Open MOM source ↗"),
+                        },
+                    )
             with st.expander("See year-by-year cost assumptions"):
                 st.dataframe(result.adjustments, hide_index=True, width="stretch")
             with st.expander("See limitations and safeguards"):

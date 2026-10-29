@@ -21,14 +21,18 @@ COMMON_ROLES = [
     "M&E Engineer",
     "BMS Engineer",
 ]
-STEP_LABELS = [
-    "Contract and operating context",
-    "Manpower quantities and their basis",
-    "Review and confirm deployment",
-    "Starting monthly allowances",
-    "Future manpower cost changes",
-    "Your manpower budget",
-]
+# Wire locations remain compatible with saved six-screen projects. Old review
+# location 2 aliases Deployment; no financial facts or confirmations migrate.
+STEP_ROUTES = (0, 1, 3, 4, 5)
+STEP_LABELS = ["Project", "Deployment", "Deployment", "Starting rates", "Annual changes", "Budget"]
+
+
+def canonical_step(step):
+    return 1 if step == 2 else step
+
+
+def step_number(step):
+    return STEP_ROUTES.index(canonical_step(step)) + 1
 
 
 def cell_text(value):
@@ -49,8 +53,12 @@ def table_rows(plan, include_excluded=False):
     ]
 
 
-def comparison_rows(plan, common=True):
-    roles = list(working_draft(plan).roles)
+def comparison_rows(plan, common=True, include_pending=True):
+    source = plan
+    if not include_pending:
+        source = plan.model_copy(deep=True)
+        source.pending = []
+    roles = list(working_draft(source).roles)
     if common:
         existing = {r.label.casefold() for r in roles}
         # Retain a saved title/alias instead of adding an equivalent second FM row.
@@ -78,6 +86,7 @@ def comparison_rows(plan, common=True):
             "Deployment": r.deployment,
         }
         for r in roles
+        if not (not common and not r.included and r.quantity is None)
     ]
 
 
@@ -153,9 +162,7 @@ def validate_comparison(rows):
                 f"{row['Role title']}: select headcount or FTE. Posts require an explicit staffing conversion first."
             )
         if unit == "headcount" and not float(value).is_integer():
-            raise ValueError(
-                f"{row['Role title']}: fractional allocation must use FTE, rather than whole-person headcount."
-            )
+            raise ValueError(f"{row['Role title']}: enter a whole number of people for headcount.")
 
 
 def parse_manpower_list(text):
@@ -199,6 +206,7 @@ def save_input_table(
     plan, brief, start_year, base_years, option_years, rows, support="", current_status=None
 ):
     candidate = plan.model_copy(deep=True)
+    candidate.pending = []  # An officer edit cannot implicitly accept assistant suggestions.
     draft = working_draft(candidate)
     status = current_status or candidate.current_deployment_status
     profile = draft.profile.model_dump(mode="json")
@@ -235,6 +243,12 @@ def save_input_table(
             role.coverage = None
             role.quantity_basis = "officer scenario"
         role.label, role.quantity = label, quantity
+        if not old or old.label != label:
+            from services.cost_routing import resolve_route
+
+            route = resolve_route(role)
+            if route["route"] != "demonstration":
+                role.future_routing = route
         if "Current quantity / FTE" in row and status == "known":
             raw_current = row.get("Current quantity / FTE")
             role.current_quantity = None if not cell_text(raw_current) else float(raw_current)
@@ -306,22 +320,44 @@ def save_input_table(
     plan.__dict__.update(candidate.__dict__)
 
 
-def initialise_rates(plan, records, year):
+def initialise_rates(plan, records, year, update_existing=False):
     """Editable defaults are unconfirmed; the officer confirms the whole rates decision."""
+    from services.reference_data import prepared
+
+    if prepared(records):
+        for r in list(plan.roles):
+            if not r.included or r.rate is not None or plan.basis_drafts.get("rate_unanswered", {}).get(r.id):
+                continue  # Activating references never changes a recorded allowance or its metadata.
+            from services.pricing import reference
+
+            bm = reference(plan, r, records)
+            if bm.get("recommendation_supported", bm["available"]):
+                payload = r.model_dump(mode="json")
+                payload.update(
+                    rate=round(bm["average"], 2),
+                    benchmark_year=None,
+                    rate_origin="Prepared reference selection",
+                    rate_reason=f"Conditional source-quote average across {bm['sample_count']} submissions; contract-year 1. Calendar pricing year and operational unit alignment remain unverified. Officer confirmation required.",
+                )
+                apply_change(
+                    plan,
+                    "role",
+                    payload,
+                    "Prepared conditional rate comparison; no approval",
+                    "System starting point",
+                )
+        return
     for r in list(plan.roles):
-        if not r.included:
+        if (
+            not r.included
+            or (r.rate is not None and not update_existing)
+            or plan.basis_drafts.get("rate_unanswered", {}).get(r.id)
+        ):
             continue
         payload = r.model_dump(mode="json")
         payload["benchmark_year"] = year
         bm = rate_benchmark(records, r.mapped_role, year, r.benchmark_status, r.benchmark_scope)
-        if bm["available"] and (
-            r.rate is None
-            or (
-                r.rate_reason.startswith("Editable arithmetic-average starting point")
-                and r.benchmark_year != year
-                and "rates" not in plan.confirmations
-            )
-        ):
+        if bm["available"] and r.rate is None:
             payload.update(
                 rate=round(bm["average"], 2),
                 rate_origin="Synthetic benchmark selection",

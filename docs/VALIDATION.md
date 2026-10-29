@@ -1,3 +1,81 @@
+# 30 October 2026 — role ranges and saved Site Xtown example
+
+See [implementation and checks](XTOWN_EXAMPLE.md). Final focused checks: **5 passed in 20.18s**; previous affected regression: 66 passed, two obsolete UI assertions subsequently corrected and verified. Saved project bodies and reference pointer unchanged; final example approval outstanding.
+
+---
+
+# 30 October 2026 — upload-first proposal review
+
+- Final affected regression: **39 passed in 52.45s** (`outputs/evaluation/upload-first-verified.log`). Includes untouched-entry visibility, manual fallback, missing values/guidance, saved proposal compatibility, normal mixed sample through shared rates/general increase/PWM/results/final approval, and activity draft retention. All model interaction is disabled or mocked.
+- The browser entry page now leads with upload and Read my proposal; empty tables and confirmation forms are absent until input is read or manual entry is chosen. The normal sample populated four roles and contract context successfully. No deliberate error-demo option remains visible.
+- The revised sample contains 7 current / 8 proposed headcounts, starts January 2027 with one base plus one option year, and leaves future assumptions blank. Supplied monthly charges total SGD 35,500; the app's shared services recommend the applicable general and PWM treatment for officer confirmation. This supersedes the earlier ordinary sample's 2.5% and 2+1-year data below.
+- Main app refreshed without switching, saving or approving its current project. Prior saved bodies, zero production proposal reviews and the active v3 pointer remain unchanged. Ruff, compilation, formatting, whitespace and a 155-file working-tree audit pass. No paid evaluation, source import/cleaning, deployment or further integration. See [upload-first implementation](TRACK2_UPLOAD_FIRST.md).
+
+---
+
+# 30 October 2026 — earlier standard uploads and annotated UI cleanup
+
+- **64 passed in 212.84s** (`outputs/evaluation/oct30-verified.log`) across sample/legacy compatibility, officer journey, five-step UI, activity navigation and shared Track 2. New-role and retired-form fixtures reflect the current interface; calculation rules were preserved.
+- Standard blank workbook plus a separate ordinary filled sample upload successfully. The sample has current 5 / proposed 6 headcounts, 2 base + 1 option year and one explicitly scoped 2.5% officer assumption. Monthly-cent rounding yields annual 339,600.00 / 348,090.00 / 356,792.52; contract 1,044,482.52.
+- Browser verification on isolated actual-source data completed results, original comparison, 16-sheet Excel download and final approval. The original uncalculable total remained unavailable. Read-only service timings were under 0.1 seconds each, except workbook generation at 4.654 seconds. The prior rendering stall did not recur after restarting the corrected model-disabled preview wrapper.
+- Removed the homepage draft reminder, unlisted-role form and shared-reason form. Prior custom titles, recorded rationales and legacy drafts remain preserved without hidden form blockers. Main-session current edits, both pre-existing saved bodies and the v3 pointer remain intact.
+- Ruff, formatting, compilation, whitespace and current-working-tree privacy audit passed. Live model detection remains unverified; all tests were offline/mocked. No paid evaluations, source cleaning/generation/import, deployment, push or unrelated integration. See [current handover](HANDOVER_CURRENT_2026-10-30.md).
+
+---
+
+# 29 October 2026 — v3 reference and explicit PWM routing
+
+- Activated `Excel_Selection_Completed_Sanitised_v3.xlsx`, dataset `21a2ad31f607d169-sprint2-reference-v2`; previous v2 snapshot retained for rollback. Required columns, record/control IDs and joins passed. 12,021 original observations are unchanged; 27 Standard Roles, 17 typical and six PWM Yes flags.
+- Final fresh-process regression: **122 passed in 191.61 seconds** (`outputs/evaluation/v3-verified.log`). Covers isolated importer/activation checks, prepared PWM UI, role creation/renaming, exact flags, missing flags, job levels, calendar months, no overlap, saved references, mocked assistant mismatch/correction, five-step navigation and existing-proposal compatibility. No paid model calls.
+- Two saved project bodies and their calculation results match before/after activation and app refresh. Main preview refreshed without saving, confirming or resetting the officer draft. Deployment now presents the two agreed actions without the duplicate discussion expander.
+- 86 workbook PWM observations match the retained policy catalogue; 153 remain separate for mapping/basis/date review. No policy catalogue overwrite, rate cleaning, generated observations, unrelated integration, push or deployment. Live-model extraction/reasoning has not been evaluated. See [activation details and limitations](TRACK1_V3_REFERENCE.md).
+
+---
+
+# 28 October 2026 — headcount entry and comparison
+
+- Removed the FTE choice from normal deployment entry. Current/proposed/change metrics use whole people, with incomplete subtotals for missing/invalid values. Excluded proposed zero rows still contribute their current staff to the comparison. Unspecified context does not assume current zero.
+- Earlier saved units remain explicit and excluded from headcount totals until the officer supplies headcounts. No automatic FTE-to-person conversion or repricing. Assistant acceptance rejects newly introduced FTE/fractional headcounts.
+- 52 affected journey/pricing/headcount checks passed; final summary/input checks: 19 passed in 23.83 seconds; headcount/assistant compatibility: 19 passed in 34.54 seconds. Tests use isolated databases and mocked/disabled model calls. Ruff, compilation and whitespace checks pass; saved production rows match the pre-update copy.
+
+---
+
+# 28 October 2026 — five-step Track 1 refinement
+
+- Complete offline regression: **331 passed in 625.45 seconds** (`outputs/evaluation/five-release.log`). A final control-restore fix found in the read-only live-session check was then verified with **22 affected navigation/pricing checks passed in 59.73 seconds** (`outputs/evaluation/five-navigation-final.log`). Hidden Streamlit widget keys now reload retained rate values when returning to a screen; financial facts and confirmations are unchanged. Ruff, compilation, Git whitespace and working-tree privacy checks pass (62 files / zero findings). Test databases and test-only model mocks/guards were used; no paid evaluations.
+- The five visible steps are Project, Deployment, Starting rates, Annual changes and Budget. Coverage includes all-step navigation, old six-screen locations, no confirmation from navigation, directly editable merged deployment/confirmation, explicit proposal acceptance, source-linked role choices, case/alias deduplication, unrestricted exact inputs, both bar directions, saved explicit zero and role/year profiles, unchanged-reference preservation, cleared-rate preservation, invalid unfinished project text save/reopen, mixed PWM components and scenario isolation/adoption.
+- Browser checks used separate prepared and explicitly synthetic fixture databases on temporary ports 8512/8513. A typical pill added only one role, left quantity unanswered and removed the added alias from available choices. Monthly exact 9,000.00 and bar adjustment to 8,999.99 stayed synchronized with monthly/annual costs. Annual bar 2.33% and exact input 2.40% updated the preview while its 2.32% database-average marker stayed fixed. Original saved 2%/2.5%/3% role profiles were retained separately and restored to zero change from the recorded budget. Native keyboard control was used when browser auto-scroll placed a checkbox beneath the sticky navigation. Narrow-viewport labels wrap and currency figures remain complete.
+- The synthetic walkthrough reaches Budget as step 5, with full/base/option totals and the annual component chart/table directly visible, plus separate scenarios, manpower and sources. No final officer budget was confirmed and no red runtime errors were observed. Local screenshots are retained under `outputs/evaluation/five-annual.png` and `five-budget.png`.
+- Production database comparison: the main app independently recorded a revision **14 → 15** save during verification. Only navigation, confirmation versions and history changed; its profile, roles, responsibilities, decision bases and assumption drafts are identical to the pre-run copy. The other revision-10 project row is identical. The latest live revision is preserved, not rolled back. Test/preview project IDs and databases are separate. Five original reference/fixture hashes and the source workbook SHA256 are unchanged. Final audit details remain in `outputs/evaluation/five-preservation.json`.
+- The active workbook has **26 Standard Roles / 17 Typical manpower? = Yes** entries, confirmed by the user as Common Manpower. Both UI lists resolve from the active snapshot; no UI-maintained production role list. Source-provenance identities have no duplicates. FM source extremes were traced to SHA-matched source columns and retained, not trimmed or automatically normalised. Missing comparable person/FTE deployment, hours/coverage and inclusions still prevent a verified monthly-price recommendation; that is a backend project-team gap, not an officer investigation task. Annual reference method and historical cohorts are unchanged. See [five-step implementation and exact data gaps](TRACK1_FIVE_STEP.md).
+- Main app on port 8511 is left running; temporary previews are closed/stopped after visual checks. Existing unrelated track/integration work is retained. No push, unrelated merge, deployment or paid model evaluation.
+
+---
+
+# 28 October 2026 — Track 1 officer journey refinement
+
+- Complete final offline regression: **321 passed in 259.72 seconds** (`outputs/evaluation/officer-final-verified.log`). Workspace TEMP/TMP and isolated databases; paid-model calls mocked or guarded. Ruff, Python compilation and Git whitespace checks passed.
+- Coverage includes new non-PWM Steps 1–6, relevant PWM/mixed component reconciliation, reopened drafts, shared operational-reason persistence, explicit assistant proposal acceptance, unchanged confirmation preservation, material invalidation, direct allowances, general compounding, custom inputs, existing zero/yearly/quoted profiles, distinct role-specific constants, read-only scenario previews and explicit adoption. Original reference switching cannot reprice accepted budgets.
+- Browser walkthrough used only a separate synthetic preview database. Step 3 exposes the two requested actions; Step 4 preserves prices and retained explanations; Step 5 preserves distinct 2%/2.5%/3% role assumptions with zero change from recorded budget; Step 6 shows full/base/option SGD 2,505,318.72 / 1,624,907.04 / 880,411.68, four tabs and reconciled annual components. Scenario viewing did not adopt changes. No red runtime errors or live AI calls. Screenshots: `outputs/evaluation/officer-step3.png` and `officer-step6.png`.
+- Read-only comparison after browser checks confirms **both production saved projects unchanged**. Five original reference/fixture hashes and the source workbook SHA256 are unchanged. Working-tree privacy scan: **56 files, zero findings**. Generated workbooks, private data and outputs remain ignored.
+- Main app is available on loopback port 8511 (health 200). The saved officer project was reopened at Step 4 and the previously visible unsaved Admin Executive allowance restored to 5,030.45 without saving or confirming it. Temporary preview 8512 was closed/stopped. No final budget confirmation, push, merge, paid evaluation or deployment.
+- FM source extremes were investigated, not trimmed. Unverified quote units, deployment and inclusions prevent a confident per-head/FTE recommendation; conditional statistics remain secondary. Existing PWM eligibility, salary evidence, calendar-month/FTE limits and unpublished-period decisions remain explicit. Calculation/rounding rules unchanged. See [implementation and limits](TRACK1_OFFICER_REFINEMENT.md).
+
+---
+
+# 27 October 2026 — prepared source connection
+
+- Full offline regression after shared retrieval, UI and compatibility changes: **302 passed in 226.94 seconds**. A test-isolation issue found during the first combined run was corrected by restoring the legacy reference context before each legacy test.
+- Prepared importer/query/UI follow-up, including two additional compounding/retained-quote checks: **9 passed in 18.41 seconds**. Tests use invented workbooks, isolated databases/stores and a paid-model-call guard.
+- Final compact-evidence/review/export/PWM follow-up: **54 passed in 44.87 seconds**.
+- Final provenance/unit/export/proposal checks: **70 passed in 49.48 seconds**. Ruff, compilation and whitespace checks passed. A working-tree privacy scan checked 36 changed/new files with zero findings; generated snapshots/workbooks remain ignored.
+- Real selection: 12,021 rows; no ID/join problems; 7,057 conditional rate records, 6,884 annual-candidate records, 2,716 quantity records; 111 synthetic rates excluded. One source-rate average and one annual pair were independently recomputed in `scripts.reference_report`.
+- Actual saved project remains JSON-equivalent at revision 14/version 54. Contract/base/option totals remain 8,150,733.48 / 3,321,473.52 / 4,829,259.96. Original workbook SHA256 and five retained reference/fixture hashes unchanged.
+- Source-switch fingerprints, repeated imports, temporary isolated reversal, insufficient FTE/scope evidence, equal submission weighting, missing-year exclusion and all four workflow entries are covered. Prepared tender calculations and Excel export pass. PWM catalogue unchanged: 239 separate observations, 86 matching wage observations, 153 requiring review.
+- Local app refreshed without restarting its session; browser verifies both activity choices at 127.0.0.1:8511. No paid model call, remote change or deployment. See [detailed readiness/limitations](PREPARED_REFERENCES.md).
+
+---
+
 # 27 October 2026 — Sprint 2 combined navigation
 
 - Agent 1 pre-checkpoint regression: **256 passed in 248.42 seconds**.

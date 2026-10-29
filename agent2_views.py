@@ -361,7 +361,13 @@ def _editor(label: str, frame: pd.DataFrame, key: str) -> pd.DataFrame:
 def render_agent2_track3():
     _state()
     st.title("Compare submissions against an approved budget")
-    st.caption("Demonstration rate references are synthetic, not validated market evidence.")
+    from services.reference_data import active_snapshot
+
+    st.caption(
+        "Prepared conditional source quotations; calendar pricing years and award outcomes unknown."
+        if active_snapshot() is not None
+        else "Demonstration rate references are synthetic, not validated market evidence."
+    )
     st.write(
         "Compare manpower costs and deployment against your approved budget, identify key variances "
         "and generate clarification questions. You make the final evaluation decision."

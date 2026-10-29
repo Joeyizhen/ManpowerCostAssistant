@@ -1,88 +1,67 @@
 # AI-Powered FM Manpower Cost Assistant
 
-Local Sprint 2 application with two activities: manpower budgeting and tender evaluation. Tracks 1/2 retain their current workflows; Tracks 3/4 run independently with labelled sample references. Direct budget transfer, shared-reference activation and Track 5 maintenance remain unavailable. The integration branch is a local demonstration milestone, not a production release.
+A university capstone application for FM manpower budgeting and tender review. One Streamlit entrypoint, `app.py`, provides both agents and four workflows. Python calculates costs; optional AI guidance explains inputs and findings. Saving, accepting suggestions and confirming a budget are separate actions.
 
-| Owner | Agent | Tracks |
-|---|---|---|
-| Project owner | Agent 1: Manpower Budget Planning | 1 — Build New Plan; 2 — Review Proposed Plan |
-| Teammate | Agent 2: Tender Review | 3 — Compare Against Approved Budget; 4 — Review and Compare Tenderer Proposals; 5 — Maintain Historical Manpower Database |
+| Activity | Agent and workflows |
+|---|---|
+| Manpower budgeting | Agent 1: build a new budget (Track 1); review an uploaded proposal (Track 2) |
+| Tender evaluation | Agent 2: compare submissions against an approved budget (Track 3); review tender pricing against historical references (Track 4) |
 
-See [collaboration/branches](docs/COLLABORATION.md), [interfaces and synthetic budget](docs/INTERFACES.md), [checkpoint and known issues](docs/HANDOVER.md), [project brief](docs/PROJECT_BRIEF.md) and [validation](docs/VALIDATION.md). Private original handoffs and saved officer data are retained locally and excluded from Git.
+Track 5 historical-data maintenance is planned. Trusted transfer of a live budgeting project into tender review and dedicated like-for-like cross-tenderer comparison are incomplete. The app supports officer judgement; it does not select a winning tenderer or authenticate management approval.
 
-## Local setup
+## Run the complete app
 
-Use Python 3.14 for the tested environment. The dependency declaration supports 3.11–3.14, but other versions have not been verified here. With `uv` installed, run from the repository root:
+Python 3.14 is the tested development version. The declared range is 3.11–3.14; other versions have not been verified. Select the consolidated branch from the PR, or a reviewed `main` containing it, then run:
 
 ```powershell
+git clone https://github.com/Joeyizhen/ManpowerCostAssistant.git
+cd ManpowerCostAssistant
 uv sync --frozen --python 3.14
 Copy-Item .env.example .env
 uv run streamlit run app.py --server.address 127.0.0.1 --server.port 8511 --browser.gatherUsageStats false
 ```
 
-Open `http://127.0.0.1:8511/`. The preview is local to this computer and stops if its process/computer stops. Existing users can run `.venv/Scripts/python.exe` directly instead of `uv run`.
+Open `http://127.0.0.1:8511/`. Both activities start from this app. Preserve an existing private `.env` rather than copying over it. Without `uv`, install the locked runtime requirements into a virtual environment; see [setup and deployment](DEPLOYMENT.md).
 
-Edit `.env` privately to set `OPENAI_API_KEY` and `OPENAI_MODEL` if live guidance is required. Alternatively use a private `.streamlit/secrets.toml`, copied from its example. Never put credentials in chat, source, command-line arguments or Git. No model is silently chosen. Each developer uses their own provider access; without a key the tables and synthetic Python tests work, while live review/chat is disabled. The synthetic integration example needs no API access.
+No API key is needed for labelled examples, data entry, deterministic checks, calculations or exports. For optional live guidance, privately configure both `OPENAI_API_KEY` and `OPENAI_MODEL` in `.env` or server-side Streamlit secrets. No model is silently selected. AI actions require an explicit request and can incur provider charges. Mocked/offline tests do not establish live assistant reliability.
 
-Live guidance uses the Responses API with validated tools, finite limits and no automatic retries. The preview process needs outbound provider connectivity; a sandbox-restricted launch may serve the page but block guidance. Failed turns remain available for explicit retry. Shared hosting requires server-side OIDC login, PostgreSQL and an explicit allowlist; see [DEPLOYMENT.md](DEPLOYMENT.md). Do not expose local review mode publicly. No deployment is performed here.
+## Current workflows
 
-## Sprint 2 navigation
+**Build a new budget:** Project → Deployment → Starting rates → Annual changes → Budget. New deployment uses whole-person headcount, shows current/proposed quantities and retains original role titles. Saved earlier units and financial decisions remain readable. AI discussion and officer confirmation are separate. Editable role-specific illustrative ranges fill genuinely missing rates; they are authored assumptions, not market evidence. Existing and explicitly cleared rates are retained.
 
-Start with **Manpower budgeting** or **Tender evaluation**, then choose one of the two tasks. Back returns to that activity's options; Change activity returns to the landing page. Recorded models and unfinished value inputs remain separate for each workflow in the current session. Save/download still provides persistence beyond the session, and existing project-switch protections remain.
+General annual changes use a qualified reference when available or an explicit officer assumption. PWM treats a confirmed eligible salary component separately, with known worker quantities, category, dates and unpublished-period decisions. The same salary component cannot also receive a general increase. The retained policy catalogue is dated; it does not establish current applicability for every worker.
 
-Tender evaluation runs independently from live budgeting projects. Track 4 currently compares proposals against synthetic historical references; dedicated cross-tenderer comparison is incomplete. Historical management is marked Planned. Ordinary comparison makes no model call; optional AI explanation requires a separate explicit action. See [the integration report](docs/SPRINT2_INTEGRATION.md) for source commits, checks and carried limitations.
+Results have Budget, Scenarios, Manpower, and Assumptions & sources tabs and evidence exports. Year 0 values current staffing at selected starting rates; it is not actual previous-contract spend. Average annual cost includes all base and option years. Headcount, general increases, PWM and other adjustments remain separate. See [cost comparison](docs/HEADCOUNT_COST_COMPARISON.md).
 
-## Current Track 1 behaviour
+**Review a proposed budget:** upload first, check captured project/manpower figures, then complete gaps through the shared deployment/rates/annual-change/budget screens. CSV, XLSX, text PDF, DOCX and text extraction require officer checking; scanned PDFs have no OCR. Exact uploads and original figures stay separate from accepted revisions. [Blank and ordinary mixed-manpower templates](data/templates/) are included. The deliberate error example is retained only for regression. See [upload-first review](docs/TRACK2_UPLOAD_FIRST.md).
 
-Enter a proposed tender title, operating-conditions description, anticipated start as MMM YYYY, and base/option terms in years (0 for no option). Month-only starts retain an unknown exact day; the first day is a disclosed illustrative costing boundary. Indicate existing contract or new site/service. The manpower screen presents eight common optional roles and lets you add inventory/custom titles. Proposed quantity 0 excludes a role; an unanswered field is not converted to 0. Fractional staffing uses FTE; posts need a confirmed staffing conversion. Current contract deployment is optional context. Copy-current and mark-unused-zero are explicit actions. Supporting documents and duty/contractor notes are optional. The pasted-list UI has been removed.
+**Compare against an approved budget:** confirm the budget reference, read tenderer schedules, verify values and role matches, calculate variances, record clarification decisions and export. Project JSON download/resume retains tender-review work. Approval metadata is officer-confirmed, rather than a trusted transfer from Agent 1.
 
-Review my manpower plan sends the retained brief, table and supporting text to the real LLM for targeted sanity checks; it does not approve anything. Correct the plan and use the single manpower confirmation before pricing. Rates use one reference year, arithmetic-average starting points when supported, editable sliders/exact inputs and optional assumptions. Unsupported roles retain their titles and need officer rates. Pricing shows monthly role costs and observed synthetic bands. Future-price controls are compact and expandable. Findings, full-contract charts, final officer confirmation and Excel share the final screen; final approval is an explicit officer action. Editing values invalidates dependent confirmations.
+**Review tender pricing:** verify submissions/role matches, choose historical comparison context, inspect pricing findings, record officer decisions and export. Insufficient evidence must remain visible. Optional AI explanation is separate from ordinary calculation. See [the consolidation report](docs/SPRINT2_INTEGRATION.md) for teammate history and carried limitations.
 
-The six screens separate project details, manpower inputs, assistant review, rates, future changes and full-budget/export review. Back/Continue and saved step position preserve the draft; revisions invalidate dependent decisions. The sidebar can delete a selected saved project and its revision history after a named confirmation; this cannot be undone. Missing numeric cells are blank; narrow tables can still scroll horizontally. Saved/unsaved status and Save/Discard/Keep editing protect drafts when switching projects. See [the officer-experience review](docs/OFFICER_EXPERIENCE.md). New current/proposed/zero prompt behaviour has not been rechecked live. Native Excel recalculation, shared hosting and real market validity remain unverified. These are a documented development baseline, not a completed product claim.
+## Reference data and persistence
 
-## Current Track 2 behaviour
+A clean clone uses explicitly labelled synthetic demonstration records. These are invented examples, never verified tender prices. Role-title context alone does not establish a comparable rate. The Site Xtown loader and ordinary proposal sample work without the owner's private saved-project database or source workbook. Example preparation is not final officer approval.
 
-Add proposed budget → check figures and assumptions → view the reviewed budget. Paste a table or description, upload CSV/XLSX/PDF/DOCX/text, or enter rows manually. Confirm the interpreted units and inclusive monthly charges before review. Unknowns remain unanswered. Original figures, supplied totals and exact uploaded evidence are retained separately from accepted revisions; proposal reviews have their own saved revisions and snapshot recovery.
+Private prepared snapshots can be provisioned separately under `local_data/references` or a private `MANPOWER_REFERENCE_DIR`. No prepared workbook or raw records are shipped. The owner's local v3 activation is unchanged by consolidation; v2 is not activated. Do not regenerate/import sources to make a clone run. See [reference provisioning](docs/PREPARED_REFERENCES.md).
 
-The review reuses Track 1 calculations, eligible rate/annual-increase references, coverage checks and relevant PWM safeguards. Only material discrepancies require a recorded response; capability gaps remain qualifications rather than a routine questionnaire. Previewing a rate, applying changes, saving, confirming reviewed inputs and approving the final budget are separate actions. The four-tab results page compares original and reviewed EPV and provides a management report and evidence workbook. See [Track 2 implementation and limits](docs/TRACK2_IMPLEMENTATION.md).
+Budgeting projects and original uploads use `local_data/plans.db` by default. Back up this private storage. Agent 2 uses JSON download/resume; browser drafts alone are not durable. Shared hosting requires PostgreSQL, OIDC and an access list; that hosted combination remains unverified. [DEPLOYMENT.md](DEPLOYMENT.md) covers packaging, persistence and acceptance checks. GitHub publication does not deploy a service.
 
-Document extraction is conservative and requires officer checking. Scanned PDFs need manual transcription; no OCR or universal layout interpretation is claimed. Private quoted prices are proposal evidence, never new benchmark records. Live assistant review is optional and has not been evaluated with paid calls in this refinement. The v2 reference workbook remains inactive.
-
-## Current Track 3 behaviour
-
-Track 3 creates a tender-review project, confirms the approved-budget reference and revision, verifies multiple tenderer schedules, reviews role matches, compares full-contract and role-level costs, records officer comments/statuses, exports a traceable workbook and saves/resumes project JSON. Comparability checks block missing years, duplicate role-year rows and incompatible headcount/FTE units. Uploads must establish monthly SGD pricing; unsupported currencies and annual/daily/hourly frequencies are rejected rather than silently converted. Excel uploads inspect every worksheet containing a recognised role column and retain filename, worksheet and row provenance.
-
-This is decision support only. Below-budget submissions produce clarification prompts rather than automatic savings or rejection conclusions, and the application does not select a tenderer. Track 3 remains a prototype: it does not authenticate signed approvals, convert currencies or pricing frequencies, extract PDF/Word tables, or establish production access controls.
-
-## Synthetic evidence and handoff
-
-- `data/sample/historical.json`: invented tender schedules with explicit synthetic provenance; no real BCT prices/records.
-- `data/reference/role_titles.json`: reviewed title context only, with no benchmark-price eligibility implied.
-- `data/sample/integration/approved_budget.synthetic.json`: invented approved-budget transfer example, with a clearly synthetic approval and no saved-project mutation. Agent 2 can develop against it independently.
-- `services/integration_contracts.py` and `contracts/`: typed/versioned budget and tender-submission contracts. Shape validation does not establish a real human approval or trusted-store authorisation.
-
-Do not open/import raw BCT sources, unrelated data/notebooks or real tender records for this baseline. No trade-cost estimate, cost-per-GFA prediction or winning-bidder recommendation is included. Preserve original titles, evidence limitations and explicit quantity/rate units. Arithmetic stays in Python; the LLM interprets/explains. Do not infer employee salaries, legal defaults or proven inflation from tender charges.
-
-## Checks — no paid API calls
+## Checks without paid calls
 
 ```powershell
 uv run pytest -q
-uv run ruff check app.py hybrid_inputs.py journey_inputs.py services scripts tests
-uv run python -m compileall -q app.py hybrid_inputs.py journey_inputs.py services scripts tests
+uv run ruff check .
+uv run python -m compileall -q app.py activity_nav.py agent2_views.py agent2_track4_views.py services scripts tests
+uv run python -m scripts.evaluate_live --split development --limit 3
 ```
 
-On Windows the existing `scripts/check.ps1` also runs a zero-call evaluation dry run. In this restricted workstation use its unique project-local pytest scratch setup if the default temporary directory is inaccessible. Real-model behaviour is evaluated separately from calculations/controller tests. Native Excel is not exercised by XML/formula/cached-value checks.
+The evaluation command is a zero-call dry run unless `--allow-live` is explicitly supplied. Do not add that flag for regression. On Windows, `scripts/check.ps1` uses unique project-local test storage. Latest combined results and limits are in [VALIDATION.md](docs/VALIDATION.md).
 
-After staging reviewed files, run `uv run python -m scripts.audit_shareable` to inspect the complete index and verify exclusions without printing secrets. It rejects unlabelled datasets, unexpected binaries/paths and credential-shaped values; it complements manual privacy review rather than replacing it.
+After deliberately staging reviewed files, run `uv run python -m scripts.audit_shareable`. It audits the complete index, including labelled data/templates and credential/private-path checks. Secrets, source workbooks, raw records, saved projects, uploads, outputs, environments and personal handoffs stay private.
 
-Regenerate the integration fixture/schemas with `uv run python -m scripts.build_integration_example`. Regenerate existing invented schedules only with `scripts.generate_synthetic`. Live runners require explicit `--allow-live`; do not add that flag for collaboration preparation. Existing usage ceilings/counters and completed private traces are preserved. The reserved evaluation set must not be used for development tuning or claimed as a scored result before a frozen human-reviewed evaluation.
+## Collaboration and remaining work
 
-## Git workflow and publication
+Use feature/consolidation branches and a reviewed PR into `main`; preserve teammate history and never force-push. See [collaboration](docs/COLLABORATION.md), [project write-up](docs/PROJECT_BRIEF.md), [contracts](docs/INTERFACES.md) and [release checkpoint](docs/HANDOVER.md).
 
-`main` is the reviewed shared baseline. The owner works on `feature/agent1`; after the authorised first push and invitation, the teammate clones and creates `feature/agent2` from `origin/main`. Push each person's own branch, open tested increments as PRs to `main`, review shared changes and regularly merge `origin/main` into working branches. Do not force-push, reset shared history or discard the other person's changes. Exact first-push, invitation, clone and conflict-resolution steps are in [COLLABORATION.md](docs/COLLABORATION.md).
-
-Local preparation does not push, invite collaborators, change repository visibility, deploy or populate historical evidence. API credentials, private notes, local DBs/uploads/outputs, raw documents, environments/caches and logs are excluded. [BASELINE_FILES.md](docs/BASELINE_FILES.md) describes the intended shareable set.
-
-
-### Latest Track 1 refinement (19 October 2026)
-
-The six steps now retain shared material-decision bases and distinguish missing rationale, invalid arithmetic and advisory qualifications. Step 5 offers comparable tender-rate references or an explicit salary-component PWM method using calendar months and a dated official MOM snapshot; no salary split or automatic statutory employer rate is inferred. See [walkthrough and method](docs/TRACK1_DECISION_BASIS_PWM.md) and [supported boundaries](docs/PENDING_DECISIONS.md). Unapplied drafts can be saved separately from applied facts and confirmations. Shared internal changes await peer review; the v1 transfer schema is unchanged.
+Only Deployment responsiveness has been profiled and improved: 26.01s to 1.67s in the same isolated active-reference profile. General step-switching lag is unresolved and has not been comprehensively timed. See [performance scope](docs/DEPLOYMENT_RESPONSIVENESS.md). Live assistant evaluation, trusted approval transfer, native Excel recalculation and hosted database/identity operation remain separate work.

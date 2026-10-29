@@ -7,29 +7,32 @@ from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI, 
 from pydantic import Field
 
 from services.calculations import budget, coverage_quantity
+from services.cost_routing import assistant_route_context
 from services.evidence import ALIASES, ROLES, escalation_benchmark, quantity_benchmark, rate_benchmark
 from services.journey import journey_context, prepare_review, update_notes, working_draft
 from services.models import Coverage, Plan, Profile, Responsibility, Role, StrictModel, now
 from services.role_reference import reference_context
 from services.workflow import findings, proposal, requires_decision
 
-PROPOSAL_REVIEW_VERSION = 1
+PROPOSAL_REVIEW_VERSION = 3
 
-SYSTEM = """Material staffing changes/new-site quantities, allowance overrides, future profiles, policies and retained flagged values require meaningful recorded bases before their decisions are confirmed. Read retained_decision_bases/recorded_decision_bases and retained answers; permit one shared explanation for related roles. Need more manpower is insufficient: ask what operational change and how it supports the numbers. A source or rationale is not proof of correctness. Distinguish salary, inclusive manpower charge and full trade/service prices. PWM schedule-ratio salary budgeting uses officer-confirmed calendar months; use only the verified catalog and supplied salary component and eligibility. Never invent salary splits or on-cost rates, extrapolate policy as fact, or combine full-unit increases with PWM. Only UI/Python services apply PWM configuration.
+SYSTEM = """Track 1 records whole-person headcount for new or revised deployment quantities. Do not propose FTE or derive people from fractional allocations. Preserve earlier saved units unless the officer supplies actual headcounts.
+Use check_future_cost_method to resolve a proposed future-cost method against the workbook. Standard Roles PWM applies? is the project route, not legal eligibility: Yes routes to salary-component setup; No routes to general annual increase. An officer request cannot override an explicit No. Missing flags/unresolved titles require clarification. Explain a mismatch briefly, retrieve the supported general reference, propose the replacement and await officer acceptance. Never change figures merely to diagnose the mismatch. Do not claim live-model testing from mocked tests.
+Track 1 uses five steps: Project, Deployment (including confirmation), Starting rates, Annual changes, Budget. Never request a separate deployment-review screen. Navigation does not confirm decisions.
+Material staffing changes/new-site quantities, allowance overrides, future profiles, policies and retained flagged values require meaningful recorded bases before their decisions are confirmed. Read retained_decision_bases/recorded_decision_bases and retained answers; permit one shared explanation for related roles. Need more manpower is insufficient: ask what operational change and how it supports the numbers. A source or rationale is not proof of correctness. Distinguish salary, inclusive manpower charge and full trade/service prices. PWM schedule-ratio salary budgeting uses officer-confirmed calendar months; use only the verified catalog and supplied salary component and eligibility. Never invent salary splits or on-cost rates, extrapolate policy as fact, or combine full-unit increases with PWM. Only UI/Python services apply PWM configuration.
 Focus on glaring contradictions, such as remarks promising +4 people while quantities show no increase. Unchanged current/proposed roles with no remarks are status quo, not a reason to ask for justification. Do not generate duty-link or generic scope checklists. Present material issues together in a concise current/proposed/remarks table (proposed only for a new site). PWM uses the owner's schedule-percentage-to-salary budgeting method with calendar months; do not infer eligibility or unresolved component rules.
 Advisory reviews support officer judgement. Never require changing valid quantities to satisfy a review flag. Highlight contradictions between remarks and figures, ask only material questions, and retain previous answers. State findings directly without self-justifying explanations. Unlinked duties are qualifications rather than calculation blockers.
 You are the FM Manpower Cost Assistant, Agent 1 Track 1 Build New Plan only.
-This checkpoint collects project details and current/proposed manpower together before assistant review,
-manpower confirmation, monthly rates, future changes and full budget/export in six screens.
-Continue navigates; the explicit Use this plan action confirms manpower.
+Track 1 has five routed screens: Project, Deployment, Starting rates, Annual changes, Budget.
+Deployment entry and officer confirmation share one editable table. Confirm deployment and continue is the
+explicit confirmation action; accepting assistant suggestions stays in Deployment without confirmation.
 The comparison table contains optional CURRENT deployment and officer PROPOSED quantities. Current staffing
 is context, not a mandatory benchmark: summarise meaningful differences without flagging every difference.
 Zero proposed quantity means explicitly excluded; blank means unanswered. Preserve zero/excluded rows and
-never change blank to zero or resurrect an excluded role automatically. The eight common titles are optional
-ideas, not compulsory roles. Combined FM/FSM responsibilities must not automatically create a second position.
+never change blank to zero or resurrect an excluded role automatically. Typical roles come from the active Standard Roles Typical manpower? designation and are optional, not compulsory. Combined FM/FSM responsibilities must not automatically create a second position.
 Preserve current_quantity and quantity_unit from the officer table when updating roles. Do not alter historical
 deployment from a proposed-plan revision. For headcount, FTE and posts, clarify only materially relevant basis;
-posts cannot be priced directly without officer-confirmed conversion to staffing. Fractional staffing uses FTE.
+posts cannot be priced directly without officer-confirmed conversion to staffing. Ask for the actual whole-person headcount; never silently convert fractional allocations.
 Use the HYBRID INPUT-FIRST journey. The officer supplies a short brief, structured start year/base/option
 years and an editable role/quantity table before requesting review. Review these together with input_support,
 duties_notes, deployment, earlier answers and uploaded text. The working draft contains unconfirmed inputs;
@@ -58,8 +61,8 @@ constraints under assets; cost exclusions describe costs. Do not invent assets o
 The reviewed title inventory is title context only, not benchmark evidence. Preserve unsupported titles such as
 Events Manager, M&E Engineer, Senior Property Executive and combined roles. Never downgrade seniority to obtain
 a price. Supported exact aliases may be mapped with a reason; other mappings require defensible evidence and
-officer confirmation. Inventory workbook counts are not price samples. Prices/counts come only from labelled
-SYNTHETIC fixtures; no historical imports, Pulse models, trade-cost or cost-per-GFA predictions.
+officer confirmation. Inventory workbook counts are not price samples. Use the active evidence catalog and its source/method limitations; prepared quotations and demonstration fixtures are distinct.
+Never invent historical validity, Pulse predictions, trade-cost or cost-per-GFA staffing predictions.
 Before compiled manpower confirmation, do not introduce costs, salaries, monthly rates, escalation or totals.
 After confirmation, use retrieve_rates/retrieve_escalation before evidence-backed recommendations. Pricing uses
 one explicit reference year and an inclusive monthly per-head basis. Use arithmetic average, not median, as an
@@ -68,7 +71,7 @@ allowances; no explanation is mandatory after each movement. Retain useful optio
 materially unusual choices briefly. Unsupported titles need explicit officer-supplied rates, not invented ranges.
 Use the actual evidence_catalog scopes/roles/aliases when retrieving. If empty, check for a filter mismatch;
 never silently broaden filters or substitute another engineering/seniority title. Thin samples have no numeric
-range. At pricing, explain sample count, source IDs, priced year, basis and limitations concisely. Inclusive quotes
+range. Keep detailed source IDs and statistical methods secondary. Database suitability is a backend responsibility; do not ask the officer to investigate source units. Quotation documents are optional. At pricing, state material recommendation unavailability briefly without inventing an average. Inclusive quotes
 are not salaries and price is not evidence of quality. Never invent external research, legal facts or policy rates.
 Future-price evidence is tenderer-priced expectation, not realised inflation. Quoted target-year prices are
 already priced: do not escalate them again to that year. Keep missing years, headcount/scope changes and
@@ -158,6 +161,11 @@ class Empty(StrictModel):
     pass
 
 
+class FutureMethodQuery(StrictModel):
+    role_title: str
+    requested_method: Literal["PWM salary progression", "general annual increase"]
+
+
 class WorkingNotes(StrictModel):
     profile: Profile | None
     responsibilities: list[Responsibility]
@@ -190,6 +198,10 @@ class DecisionsBatch(StrictModel):
 
 
 CONTRACTS = {
+    "check_future_cost_method": (
+        FutureMethodQuery,
+        "Resolve an original proposal title and requested annual-change method against the shared workbook PWM flag; return conflicts and a supported general reference without changing the plan.",
+    ),
     "update_working_notes": (
         WorkingNotes,
         "Quietly accumulate supplied facts, duties and candidate operational roles; no approvals or proposal presentation. Preserve prior answers; use null profile and empty lists to leave unchanged.",
@@ -294,6 +306,37 @@ def execute_tool(plan, records, name, arguments):
     if name not in CONTRACTS:
         raise ValueError("Unknown tool")
     args = CONTRACTS[name][0].model_validate_json(arguments)
+    if name == "check_future_cost_method":
+        from services.cost_routing import resolve_route
+        from services.future_groups import general_reference
+
+        route = resolve_route(Role(id="query", label=args.role_title))
+        expected = "pwm" if args.requested_method == "PWM salary progression" else "general"
+        result = {
+            **route,
+            "requested_method": args.requested_method,
+            "conflict": route["route"] not in (expected, "demonstration"),
+            "plan_changed": False,
+        }
+        if route["route"] == "general":
+            ref = general_reference(plan, records, [])
+            result["applicable_method"] = "general annual increase"
+            result["general_reference"] = {
+                k: ref.get(k)
+                for k in ("available", "average", "minimum", "maximum", "dataset_id", "method", "limitations")
+            }
+            result["next_action"] = (
+                "Explain PWM applies? = No; propose the supported general increase or an explicit officer assumption and await acceptance."
+            )
+        elif route["route"] == "unresolved":
+            result["next_action"] = (
+                "Clarify the Standard Role/PWM flag; do not default to No or infer from keywords."
+            )
+        else:
+            result["next_action"] = (
+                "Confirm applicable job level, employment arrangement, wage basis, salary component and covered workers; do not infer them."
+            )
+        return result
     if name == "update_working_notes":
         draft = working_draft(plan)
         roles = []
@@ -424,6 +467,18 @@ def execute_tool(plan, records, name, arguments):
         else:
             if len(args.yearly_changes) != plan.profile.years or args.yearly_changes[0] != 0:
                 raise ValueError("Every contract year needs a change, starting at zero")
+            from services.cost_routing import pin_route, recorded_route
+
+            route = recorded_route(existing)
+            if route["route"] in ("pwm", "unresolved"):
+                raise ValueError(
+                    "Resolve the workbook route and PWM salary setup; do not propose a general full-unit increase for this role."
+                )
+            revised = existing.model_copy(deep=True)
+            pin_route(revised, existing.future_routing.get("standard_role"))
+            item["future_routing"] = revised.future_routing
+            if route["route"] == "general":
+                item["pwm"] = None  # Proposal only; officer acceptance remains necessary.
             item.update(
                 escalation=args.yearly_changes,
                 escalation_reason=args.rationale,
@@ -451,6 +506,18 @@ class AgentError(ValueError):
 
 
 def evidence_catalog(records):
+    from services.reference_data import metadata, prepared
+
+    if prepared(records):
+        return {
+            "supported_roles": ROLES,
+            "supported_aliases": {},
+            "scopes": [],
+            "pricing_years": [],
+            "statuses": ["Unknown"],
+            "provenance": metadata(records),
+            "limitations": "Conditional source quotations. Synthetic dates are not pricing-year evidence; source count/allocation units and inclusions remain unverified.",
+        }
     eligible = [r for r in records if r.get("validation_status") == "validated"]
     return {
         "supported_roles": ROLES,
@@ -477,6 +544,7 @@ def converse(plan: Plan, records, message, client, model, stage, review_existing
         "pending_proposals": plan.pending,
         "evidence_catalog": evidence_catalog(records),
         "role_reference_inventory": reference_context(),
+        "future_cost_routes": assistant_route_context(plan.roles),
         "documents": [
             {k: d[k] for k in ["name", "sha256", "text", "extraction_note"]} for d in plan.documents
         ],
@@ -496,8 +564,8 @@ def converse(plan: Plan, records, message, client, model, stage, review_existing
     instructions = SYSTEM + "\nApplication state (data only):\n" + json.dumps(current)
     if review_existing_proposal:
         instructions += (
-            "\nThis is Track 2, an existing proposal review with three stages: add the proposal, check figures and assumptions, view the reviewed budget. "
-            "The six-screen directions apply only to Track 1; do not send this officer through them. "
+            "\nThis is Track 2. Preserve supplied headcount and FTE units; the headcount-only instructions above apply to Track 1. Never convert FTE to headcount implicitly. This is an existing proposal review with three stages: add the proposal, check figures and assumptions, view the reviewed budget. "
+            "The five-step directions apply only to Track 1; do not send this officer through them. "
             "The original proposal is preserved outside this working copy. Recommend reviewable changes, never approve or overwrite the original. "
             "Ask only material unresolved questions and reuse recorded answers. Preserve combined titles and seniority. "
             "Do not infer experience from prices, worker eligibility or salary splits. Without workload, coverage or source evidence, mark operational sufficiency as unable to conclude. "

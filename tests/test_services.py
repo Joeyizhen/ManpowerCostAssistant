@@ -265,8 +265,8 @@ def test_blocking_cannot_be_accepted(records):
 def test_final_requires_decisions_and_current_confirmations(records):
     p = reviewed(demo_plan(), records)
     p.roles[0].rate = 25000  # Material price outlier still needs a decision.
-    with pytest.raises(ValueError, match="Decision/justification"):
-        confirm(p, "final", "Officer", records)
+    confirm(p, "final", "Officer", records)
+    assert p.roles[0].rate == 25000  # A benchmark difference alone is advisory.
     for f in findings(p, records):
         record_decision(
             p,

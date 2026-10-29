@@ -63,11 +63,12 @@ def test_range_exact_input_and_fte_totals_update_together(monkeypatch, tmp_path)
     p, role, key = controls(at)
     bm = rate_benchmark(load_records(), role.mapped_role, 2028)
     selected = round(bm["minimum"] + 100, 2)
-    at.slider(key=key + "_slider").set_value(selected).run()
+    at.number_input(key=key + "_number").set_value(selected).run()
     p, role, key = controls(at)
     assert role.rate == selected and at.number_input(key=key + "_number").value == selected
     assert role.quantity == 0.5 and role.quantity_unit == "FTE"
-    assert "Monthly rate per FTE" in at.number_input(key=key + "_number").label
+    assert at.number_input(key=key + "_number").label == "Monthly rate per FTE — Technician"
+    assert any("0.5 FTE" in x.value for x in at.markdown)
     assert not at.button(key="confirm_rates").disabled
     assert not any(x.key == key + "_rationale" for x in at.text_area)
     result = preliminary(at.session_state["plan"])
@@ -75,7 +76,7 @@ def test_range_exact_input_and_fte_totals_update_together(monkeypatch, tmp_path)
     assert not at.button(key="confirm_rates").disabled
     second = round(selected + 50, 2)
     at.number_input(key=key + "_number").set_value(second).run()
-    assert at.slider(key=key + "_slider").value == second
+    assert at.number_input(key=key + "_number").value == second
     assert not any(x.key == key + "_rationale" for x in at.text_area)
 
 
@@ -83,11 +84,10 @@ def test_outside_rate_is_explicit_and_reason_survives_save_resume(monkeypatch, t
     at = prices(monkeypatch, tmp_path)
     p, role, key = controls(at, "Facility Manager")
     bm = rate_benchmark(load_records(), role.mapped_role, 2028)
-    at.checkbox(key=key + "_custom").check().run()
     at.number_input(key=key + "_number").set_value(round(bm["maximum"] + 100, 2)).run()
     at.text_area(key=key + "_rationale").set_value("Contractor mobilisation quotation").run()
     at.text_input(key=key + "_source").set_value("Synthetic quote Q1").run()
-    button(at, "Save project").click().run()
+    button(at, "Save draft").click().run()
     button(at, "Resume selected project").click().run()
     assert not at.exception and not at.error
     assert at.text_area(key=key + "_rationale").value == "Contractor mobilisation quotation"
@@ -123,11 +123,12 @@ def test_edit_deployment_keeps_rates_until_actual_change_then_invalidates(monkey
     at = prices(monkeypatch, tmp_path)
     p, role, key = controls(at)
     rate = role.rate
-    at.button(key="pricing_edit_deployment").click().run()
+    at.button(key="six_back").click().run()
     assert at.session_state["plan"].ui_step == 1
     assert next(r for r in at.session_state["plan"].roles if r.id == role.id).rate == rate
-    assert any(x.label == "Proposed headcount" for x in at.metric)
-    assert any(x.label == "Proposed FTE" for x in at.metric)
+    assert any(x.label in ("Proposed headcount", "Known proposed headcount") for x in at.metric)
+    assert not any(x.label == "Proposed FTE" for x in at.metric)
+    assert any(x.label in ("Current headcount", "Known current headcount") for x in at.metric)
 
 
 def test_pricing_proposal_unknown_and_meaningful_custom_without_reference():

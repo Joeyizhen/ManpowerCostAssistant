@@ -1,7 +1,5 @@
 """Compact starting-price rows; live inputs are separate from officer confirmation."""
 
-import html
-
 import streamlit as st
 
 from activity_nav import retained_key
@@ -16,38 +14,56 @@ from services.pricing import (
     shared_pricing_applies,
     starting_overview,
 )
+from services.reference_data import prepared
+from services.ui_context import current_plan
 from services.workflow import apply_change, invalidate
 
-PRICING_UI_VERSION = 3
+PRICING_UI_VERSION = 7
 
 
 def rate_changed(rid, field, key, peer=None):
-    plan = st.session_state.plan
+    plan = current_plan()
     role = next(r for r in plan.roles if r.id == rid)
     value = st.session_state[key]
     if field == "rate" and value == 0:
         value = None
+    if field == "rate":
+        if value is None:
+            plan.basis_drafts.setdefault("rate_unanswered", {})[rid] = True
+        elif "rate_unanswered" in plan.basis_drafts:
+            plan.basis_drafts["rate_unanswered"].pop(rid, None)
+            if not plan.basis_drafts["rate_unanswered"]:
+                plan.basis_drafts.pop("rate_unanswered")
     if getattr(role, field) == value:
         return
+    prior = retained_basis(plan, role, "rate")
     payload = role.model_dump(mode="json")
     payload[field] = value
     if field == "rate":
         payload.update(rate_reason="", rate_origin="Officer assumption")
+        if rid in plan.basis_drafts.get("illustrative_rate_bands", {}) and value is not None:
+            from services.planning_allowances import planning_reason
+
+            payload["rate_reason"] = planning_reason(value)
     apply_change(
         plan, "role", payload, "Officer edited starting " + field.replace("_", " "), st.session_state.officer
     )
+    if field == "rate_reason" and prior:
+        plan.basis_drafts.setdefault("pricing_sources", {})[rid] = prior.snapshots[rid].get(
+            "quotation_reference", ""
+        )
     if peer and value is not None:
         st.session_state[peer] = value
 
 
 def pricing_source_changed(rid, key):
-    plan = st.session_state.plan
+    plan = current_plan()
     plan.basis_drafts.setdefault("pricing_sources", {})[rid] = st.session_state[key]
     invalidate(plan, "rates", "Officer revised starting-rate document reference", st.session_state.officer)
 
 
 def year_changed(prefix):
-    plan = st.session_state.plan
+    plan = current_plan()
     plan.basis_drafts["pricing_year"] = {
         "roles": st.session_state[prefix + "_roles"],
         "explanation": st.session_state[prefix + "_text"],
@@ -56,7 +72,7 @@ def year_changed(prefix):
 
 
 def keep_shared_editor(prefix):
-    st.session_state.plan.basis_drafts["pricing_shared_editor"] = {
+    current_plan().basis_drafts["pricing_shared_editor"] = {
         name: st.session_state.get(prefix + "_" + name) for name in ("roles", "reason", "source")
     }
 
@@ -117,145 +133,128 @@ def shared_pricing_panel(plan, records, officer):
 
 def starting_prices(plan, records, officer, save, sync):
     from hybrid_inputs import confirmation_errors, show_missing
+    from services.planning_allowances import planning_range, seed_missing_allowances
 
+    seed_missing_allowances(plan, records, officer)
     st.caption(
-        "These are inclusive manpower charges per head or FTE, not employee salaries or full trade/service prices. No salary split or inflation adjustment is inferred."
+        "Enter the monthly allowance for each unit of your confirmed deployment. A quotation is optional. No automatic inflation adjustment is applied."
     )
-    if st.button("Edit deployment", key="pricing_edit_deployment"):
-        plan.ui_step = 1
-        st.rerun()
-    st.caption(
-        "Deployment is carried forward. Editing it invalidates manpower confirmation and all affected rates, future costs and final confirmations when quantities or units change."
-    )
-    shared_pricing_panel(plan, records, officer)
-    headers = st.columns([2.1, 1.2, 3.2, 1.6])
+    if plan.basis_drafts.get("illustrative_rate_bands"):
+        st.caption(
+            "Illustrative planning ranges are editable demo assumptions, not market data. Existing entered charges are retained."
+        )
+    columns = st.columns([2.1, 1.2, 2.8, 1.5])
     for col, title in zip(
-        headers,
-        ["Role", "Confirmed quantity / unit", "Monthly rate per person / FTE", "Monthly role cost"],
+        columns,
+        ["Role", "Deployment", "Monthly unit allowance (SGD)", "Monthly role cost (SGD)"],
         strict=True,
     ):
         col.markdown("**" + title + "**")
     legacy = plan.basis_drafts.get("rate", {})
-    for role in plan.roles:
+    focus = st.session_state.get("review_focus_" + plan.id, {})
+    focused = set(focus.get("roles", [])) if focus.get("step") == 3 else set()
+    if focused:
+        st.caption("The affected pricing fields are shown first; existing rates and reasons are retained.")
+    for role in sorted(plan.roles, key=lambda r: r.id not in focused):
         if not role.included:
             continue
         bm = reference(plan, role, records)
         prefix = f"rate_{plan.id}_{role.id}_{role.benchmark_year}"
-        retained_reason = role.rate_reason
         prior = retained_basis(plan, role, "rate")
-        if prior and (
-            not meaningful(retained_reason) or retained_reason.startswith("Officer budgeting allowance:")
-        ):
-            retained_reason = prior.snapshots[role.id].get("pricing_rationale", prior.explanation)
+        reason = role.rate_reason
+        if prior and not meaningful(reason):
+            reason = prior.snapshots[role.id].get("pricing_rationale", prior.explanation)
         shared = shared_pricing_applies(plan, role) and legacy.get("_shared", False)
-        if shared_pricing_applies(plan, role) and (
-            shared
-            or not meaningful(retained_reason)
-            or retained_reason.startswith("Officer budgeting allowance:")
-        ):
-            retained_reason = legacy.get("_explanation", "")
-        sync(
-            prefix,
-            (role.rate, role.rate_reason),
-            {"_slider": role.rate, "_number": role.rate, "_rationale": retained_reason},
-        )
-        a, b, c, d = st.columns([2.1, 1.2, 3.2, 1.6], vertical_alignment="top")
+        sync(prefix, (role.rate, role.rate_reason), {"_number": role.rate, "_rationale": reason})
+        a, b, c, d = st.columns([2.1, 1.2, 2.8, 1.5], vertical_alignment="top")
         a.write(role.label)
         b.write(f"{role.quantity:g} {role.quantity_unit}")
-        unit = "FTE" if role.quantity_unit == "FTE" else "person"
-        cost = monthly_role_cost(role)
-        d.write(f"SGD {cost:,.2f}" if cost is not None else "Awaiting rate")
-        outside = bool(
-            bm["available"] and role.rate is not None and not bm["minimum"] <= role.rate <= bm["maximum"]
-        )
-        controls = c.container()
-        details = c.expander("Edit basis / custom rate")
-        if bm["available"]:
-            custom = details.checkbox("Use another rate", value=outside, key=retained_key(prefix + "_custom"))
-            low, high = round(bm["minimum"], 2), round(bm["maximum"], 2)
-            if not custom and (role.rate is None or not low <= role.rate <= high):
-                controls.caption(
-                    "The recorded allowance is retained. Use another rate to edit it, or select a supported reference below."
+        with c:
+            from selection_controls import reference_bar
+
+            if bm.get("recommendation_supported"):
+                reference_bar(
+                    "Select monthly rate — " + role.label,
+                    prefix + "_bar",
+                    role.rate,
+                    round(bm["minimum"], 2),
+                    round(bm["average"], 2),
+                    round(bm["maximum"], 2),
+                    rate_changed,
+                    (role.id, "rate", prefix + "_bar", prefix + "_number"),
                 )
-            slider_key = prefix + "_slider"
-            current = (
-                role.rate if role.rate is not None and low <= role.rate <= high else round(bm["average"], 2)
-            )
-            if st.session_state.get(slider_key) is None or not low <= st.session_state[slider_key] <= high:
-                st.session_state[slider_key] = current
-            if not custom and low < high:
-                controls.slider(
-                    f"Range for {role.label} (SGD per {unit})",
-                    min_value=low,
-                    max_value=high,
-                    value=None,
-                    step=0.01,
-                    format="%.2f",
-                    key=retained_key(slider_key),
-                    on_change=rate_changed,
-                    args=(role.id, "rate", slider_key, prefix + "_number"),
-                    label_visibility="collapsed",
+            else:
+                band = planning_range(role)
+                reference_bar(
+                    "Select monthly rate — " + role.label,
+                    prefix + "_bar",
+                    role.rate,
+                    band["minimum"],
+                    band["average"],
+                    band["maximum"],
+                    rate_changed,
+                    (role.id, "rate", prefix + "_bar", prefix + "_number"),
+                    average_label="Suggested planning average",
+                    range_label="Illustrative minimum / maximum",
                 )
-                position = min(100, max(0, (bm["average"] - low) / (high - low) * 100))
-                controls.markdown(
-                    f'<div style="position:relative;height:18px;font-size:11px;color:#475467"><span style="position:absolute;left:{position:.2f}%;transform:translateX(-50%)">◆ average</span></div>',
-                    unsafe_allow_html=True,
-                )
-            controls.caption(f"Min {low:,.2f} · Average {bm['average']:,.2f} · Max {high:,.2f}")
-        else:
-            custom = True
-            controls.caption(
-                "Officer assumption: no comparable range. Enter a quotation-based allowance or an officer assumption."
-            )
-        # The numeric value always remains inspectable, including retained out-of-range allowances.
-        controls.number_input(
-            f"Monthly rate per {unit} — {role.label}",
-            min_value=0.0 if custom or outside else round(bm["minimum"], 2),
-            max_value=10000000.0 if custom or outside else round(bm["maximum"], 2),
+        c.number_input(
+            ("Monthly rate per FTE — " if role.quantity_unit == "FTE" else "Monthly rate per person — ")
+            + role.label,
+            min_value=0.0,
+            max_value=10000000.0,
             value=None,
             format="%.2f",
             step=0.01,
             key=retained_key(prefix + "_number"),
             label_visibility="collapsed",
-            disabled=outside and not custom,
             on_change=rate_changed,
-            args=(role.id, "rate", prefix + "_number", None if custom else slider_key),
+            args=(role.id, "rate", prefix + "_number"),
+            help="Monthly manpower charge for one unit of the deployment above. A supporting quotation is optional.",
         )
-        old = retained_basis(plan, role, "rate")
-        if (
-            needs_pricing_basis(role, bm)
-            and role.rate is not None
-            and not shared
-            and (not old or role.id in plan.basis_drafts.get("pricing_sources", {}))
-        ):
-            details.text_area(
-                "Pricing rationale — " + role.label,
+        cost = monthly_role_cost(role)
+        d.write(f"{cost:,.2f}" if cost is not None else "Awaiting rate")
+        needs_note = needs_pricing_basis(role, bm) and role.rate is not None and not shared and not prior
+        ask_note = needs_note and (
+            not meaningful(role.rate_reason)
+            or role.rate_reason.startswith(
+                (
+                    "Officer budgeting allowance:",
+                    "Editable arithmetic-average starting point",
+                    "Conditional source-quote average",
+                )
+            )
+        )
+        if ask_note or plan.basis_drafts.get("pricing_document_editors", {}).get(role.id):
+            plan.basis_drafts.setdefault("pricing_document_editors", {})[role.id] = True
+            c.text_area(
+                "Short pricing reason — " + role.label,
                 key=retained_key(prefix + "_rationale"),
                 height=68,
                 on_change=rate_changed,
                 args=(role.id, "rate_reason", prefix + "_rationale"),
-                placeholder="State the quotation or financial reason for this selected allowance.",
+                placeholder="Briefly explain this allowance, for example additional experience or an agreed contractor allowance. Documents are optional.",
             )
-            source = plan.basis_drafts.get("pricing_sources", {}).get(role.id, legacy.get("_source", ""))
-            details.text_input(
+        elif prior or (needs_note and meaningful(role.rate_reason)):
+            c.caption("Recorded pricing reason retained.")
+        elif shared:
+            c.caption("Shared pricing reason applies.")
+        source_value = plan.basis_drafts.get("pricing_sources", {}).get(
+            role.id, prior.snapshots[role.id].get("quotation_reference", "") if prior else ""
+        )
+        if ask_note or source_value or plan.basis_drafts.get("pricing_document_editors", {}).get(role.id):
+            c.text_input(
                 "Quotation / document (optional) — " + role.label,
-                value=source,
+                value=source_value,
                 key=retained_key(prefix + "_source"),
                 on_change=pricing_source_changed,
                 args=(role.id, prefix + "_source"),
             )
-        elif shared:
-            details.caption("Using the shared pricing basis; no repeated explanation is needed.")
-        elif old:
-            details.caption("Recorded pricing basis retained.")
-        elif bm["available"]:
-            details.caption(
-                "Within the observed range. The reference records and selected allowance are retained automatically."
-            )
+    shared_pricing_panel(plan, records, officer)
     mismatch = [
         r
         for r in plan.roles
         if r.included
+        and not prepared(records)
         and r.benchmark_year
         and plan.profile.costing_start
         and r.benchmark_year != plan.profile.costing_start.year
@@ -288,29 +287,17 @@ def starting_prices(plan, records, officer, save, sync):
             args=(prefix,),
             placeholder="Explain whether the reference-year allowance is retained or how the selected rates account for the contract start.",
         )
-    with st.expander("Rate evidence, inclusions and earlier explanations"):
-        for role in plan.roles:
-            if role.included:
-                bm = reference(plan, role, records)
-                st.markdown("**" + html.escape(role.label) + "**")
-                st.caption(
-                    f"Pricing year {role.benchmark_year} · {bm['sample_count']} comparable schedules · {role.rate_origin}"
-                )
-                st.write(bm["method"] + " " + bm["limitations"])
-                st.dataframe(bm["records"], hide_index=True, width="stretch")
-                old = retained_basis(plan, role, "rate")
-                if old:
-                    st.write(old.explanation)
-                    st.caption(old.source)
     try:
         result = starting_overview(plan)
         a, b = st.columns(2)
         a.metric("Total monthly manpower cost (SGD)", f"{result['monthly']:,.2f}")
-        b.metric("Starting annual manpower cost (SGD)", f"{result['display_annual']:,.2f}")
-        st.caption("Starting annual cost = monthly total × 12. Future changes are reviewed in Step 5.")
+        b.metric("Starting annual manpower cost (SGD)", f"{result['year_1']:,.2f}")
+        st.caption(
+            "Annual starting cost uses each role’s quantity × monthly allowance × 12, rounded to cents. Future increases are reviewed in Step 4."
+        )
         if result["annual_rounding_difference"]:
-            st.info(
-                f"FTE rounding: the monthly × 12 overview differs by SGD {abs(result['annual_rounding_difference']):,.2f} from the retained annual starting-charge calculation of SGD {result['year_1']:,.2f}. Contract budgets keep the existing rule: annual role amounts are rounded after quantity × unit rate × 12."
+            st.caption(
+                f"Rounding fractional FTE monthly totals can produce a small difference (SGD {abs(result['annual_rounding_difference']):,.2f}) from the annual budget. The annual amount above follows the budget calculation."
             )
     except ValueError:
         known = sum(monthly_role_cost(role) or 0 for role in plan.roles if role.included)
@@ -333,6 +320,7 @@ def starting_prices(plan, records, officer, save, sync):
             if not review["ready"]:
                 raise ValueError("; ".join(review.get("missing_inputs", [review["action"]])))
             accept_review(candidate, officer, records)
+            st.session_state.pop("review_focus_" + plan.id, None)
             candidate.ui_step = 4
             plan.__dict__.update(candidate.__dict__)
             save()

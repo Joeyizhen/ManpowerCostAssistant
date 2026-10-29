@@ -32,7 +32,7 @@ def test_saved_zero_recommendation_previews_without_mutation_then_confirms(monke
     expected = round(general_reference(p, load_records(), [])["average"] * 100, 2)
     at.button(key=prefix + "_use_average").click().run()
     assert not at.exception
-    assert at.slider(key=prefix + "_percent").value == expected
+    assert at.number_input(key=prefix + "_percent").value == expected
     # The choice edits a persisted preview, not the recorded assumptions or approval.
     p = at.session_state["plan"]
     assert p.roles[0].escalation == [0, 0]
@@ -61,18 +61,25 @@ def test_keep_zero_reverses_only_the_preview(monkeypatch, tmp_path):
 def test_compact_review_hides_inapplicable_pwm_and_keeps_details_available(monkeypatch, tmp_path):
     at = saved_zero(monkeypatch, tmp_path, step=5)
     p = at.session_state["plan"]
-    assert any("Demo reference data" in x.value for x in at.caption)
+    assert not any("Demo reference data" in x.value for x in at.caption)
     assert not any("Material limitation:" in x.value for x in at.caption)
-    summary = next(d.value for d in at.dataframe if "Annual cost (SGD)" in d.value.columns)
-    assert list(summary.columns) == ["Year", "Annual cost (SGD)", "Change ($)", "Change (%)"]
-    assert sum(float(v.replace(",", "")) for v in summary["Annual cost (SGD)"]) == budget(p, load_records())["contract_total"]
+    summary = next(d.value for d in at.dataframe if "Annual total" in d.value.columns)
+    assert {
+        "Contract year",
+        "Annual total",
+        "Change from prior year (SGD)",
+        "Change from prior year (%)",
+    } <= set(summary.columns)
+    assert (
+        sum(float(str(v).replace(",", "")) for v in summary["Annual total"])
+        == budget(p, load_records())["contract_total"]
+    )
     chart = json.loads(at.get("plotly_chart")[0].proto.spec)
     assert "PWM increase" not in [t.get("name") for t in chart["data"]]
     assert at.session_state["plan"].roles[0].escalation == [0, 0]
-    assert at.button(key="confirm_final_budget").label == "Confirm budget"
-    at.radio(key=f"final_budget_view_{p.id}").set_value("Cost components").run()
+    assert at.button(key="confirm_final_budget").label == "Confirm final budget"
     assert not at.exception
-    assert any("Starting-rate manpower cost" in d.value.columns for d in at.dataframe)
+    assert any("Current headcount at starting rates" in d.value.columns for d in at.dataframe)
     at.button(key=f"final_sensitivity_edit_{p.id}").click().run()
     assert not at.exception and at.session_state["plan"].ui_step == 4
 

@@ -1,3 +1,9 @@
+# Current shared prepared-reference contract — 27 October 2026
+
+The authorised Sprint 2 import activates the prepared v2 selection through `services/reference_import.py` and `services/reference_data.py`. See [readiness and methods](docs/PREPARED_REFERENCES.md). `EvidenceRow` below remains the legacy synthetic contract; it is not used to invent missing years, status, scope or headcount/FTE basis in prepared records. The prepared snapshot retains raw values/controls/mappings separately, field origins, IDs and use-specific eligibility. Current uploads never become historical references. Original documents, accepted budgets and the existing PWM catalogue are unchanged.
+
+---
+
 # Track 1 data requirements and evidence contract
 
 The current checkpoint requires a short brief, start year, base/option years and selected proposed quantities; detailed operational metadata, experience and qualifications are optional. Current deployment is comparison context, zero excludes a role, and blanks remain unanswered. Earlier table descriptions below do not add a mandatory questionnaire. Versioned cross-agent transfers are documented in [docs/INTERFACES.md](docs/INTERFACES.md); incomplete app drafts and approved budget documents remain distinct.

@@ -55,6 +55,8 @@ def shared_basis_mismatches(plan):
         roles = [r for r in plan.roles if r.id in basis.role_ids]
         if not roles or any(basis.signatures.get(r.id) != signature(plan, r, "quantity") for r in roles):
             continue
+        if len({r.quantity_unit for r in roles}) > 1:
+            continue  # Headcount and FTE are separate measures, never an additive total.
         claimed = stated_addition(basis.explanation)
         if claimed is None or any(r.quantity is None for r in roles):
             continue

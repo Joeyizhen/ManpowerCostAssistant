@@ -37,11 +37,12 @@ def test_two_activities_four_entries_and_unsubmitted_drafts_survive(monkeypatch,
     at = start(monkeypatch, tmp_path)
     assert {b.label for b in at.button} == {"Manpower budgeting", "Tender evaluation"}
     choose(at, "budgeting", 1)
-    label(at.text_input, "Proposed tender title").set_value("Synthetic budgeting draft").run()
+    label(at.text_input, "Project name").set_value("Synthetic budgeting draft").run()
     original_plan_id = at.session_state["plan"].id
     at.button(key="activity_back").click().run()
     assert at.title[0].value == "Manpower budgeting"
     at.button(key="choose_track_2").click().run()
+    at.button(key="proposal_manual_" + at.session_state["proposal"].id).click().run()
     label(at.text_input, "Proposal / project title").set_value("Synthetic proposal draft").run()
     label(at.text_area, "Paste a table or describe the proposal").set_value("Unapplied original text").run()
     label(
@@ -75,7 +76,7 @@ def test_two_activities_four_entries_and_unsubmitted_drafts_survive(monkeypatch,
     assert not at.session_state["proposal"].interpretation_confirmed
     at.button(key="activity_back").click().run()
     at.button(key="choose_track_1").click().run()
-    assert label(at.text_input, "Proposed tender title").value == "Synthetic budgeting draft"
+    assert label(at.text_input, "Project name").value == "Synthetic budgeting draft"
     assert at.session_state["plan"].id == original_plan_id
     assert not at.session_state["plan"].confirmations
     assert not any("TRACK " in x.value or "AGENT " in x.value for x in at.caption)

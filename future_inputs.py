@@ -8,27 +8,34 @@ import streamlit as st
 
 from activity_nav import retained_key
 from services.calculations import budget
+from services.cost_routing import pin_route, recorded_route, resolve_route, schedule_choices
 from services.decision_basis import meaningful, record_basis
 from services.models import PWMConfig
 from services.pwm import catalog, get_schedule, validate_pwm
+from services.ui_context import current_plan
 from services.workflow import apply_change
 
-GROUPED_UI_VERSION = 12
+GROUPED_UI_VERSION = 18
 
 
 def select_general_increase(prefix, percent, custom):
     """Change the preview only; applying and confirming remain explicit."""
     for field, value in (("percent", percent), ("exact", percent), ("custom", custom)):
         st.session_state[prefix + "_" + field] = value
-    st.session_state.plan.basis_drafts.setdefault("common_future", {}).update(percent=percent, custom=custom)
+    current_plan().basis_drafts.setdefault("common_future", {}).update(percent=percent, custom=custom)
 
 
 def keep_future_mode(key, rid):
-    st.session_state.plan.basis_drafts["future_mode_" + rid] = st.session_state[key]
+    current_plan().basis_drafts["future_mode_" + rid] = st.session_state[key]
 
 
 def pwm_trade(role):
     """UI discovery only; a title never confirms worker eligibility."""
+    route = recorded_route(role) if hasattr(role, "future_routing") else resolve_route(role)
+    if route["route"] != "demonstration":
+        from services.cost_routing import POLICY_LEVELS
+
+        return POLICY_LEVELS.get(route["standard_role"], (None, None))[0] if route["route"] == "pwm" else None
     title = role.label.casefold()
     if re.search(r"\b(cleaners?|cleaning)\b", title):
         return "cleaning"
@@ -47,6 +54,8 @@ def pwm_trade(role):
 
 
 def pwm_trade_hints(role):
+    if recorded_route(role)["route"] != "demonstration":
+        return {trade} if (trade := pwm_trade(role)) else set()
     labels = [role.label, *re.split(r"\s*(?:&|\band\b|\+)\s*", role.label, flags=re.I)]
     return {hint for label in labels if (hint := pwm_trade(SimpleNamespace(label=label)))}
 
@@ -67,7 +76,7 @@ def retain_individual_drafts():
     import ui_drafts
     from journey_inputs import pending_control_errors
 
-    ui_drafts.capture(st.session_state.plan, pending_control_errors(st.session_state.plan))
+    ui_drafts.capture(current_plan(), pending_control_errors(current_plan()))
 
 
 def role_overrides(plan):
@@ -113,7 +122,7 @@ PWM_FIELDS = (
 
 
 def keep_pwm_draft(prefix, rid):
-    saved = st.session_state.plan.basis_drafts.setdefault("pwm_" + rid, {})
+    saved = current_plan().basis_drafts.setdefault("pwm_" + rid, {})
     saved.update(
         {
             name: st.session_state[prefix + "_" + name]
@@ -143,15 +152,24 @@ def pwm_form(plan, role, officer, on_draft=None):
         return default if value is None else value
 
     trades = pwm_trade_hints(role)
-    schedules = [
-        row
-        for row in catalog()["schedules"]
-        if not trades or row["sector"] in trades or row["id"] == prior("schedule_id")
-    ]
+    schedules = (
+        schedule_choices(role)
+        if recorded_route(role)["route"] != "demonstration"
+        else [
+            row
+            for row in catalog()["schedules"]
+            if not trades or row["sector"] in trades or row["id"] == prior("schedule_id")
+        ]
+    )
     choices = {
         row["id"]: f"{row['sector']} · {row['category']} · {row['job_level']} · {row['wage_basis']}"
         for row in schedules
     }
+    if not choices:
+        st.info(
+            "No matching retained PWM schedule for this mapped role/job level. Resolve the policy mapping before applying progression; the saved configuration is retained."
+        )
+        return
     st.markdown("**1. Category and eligibility**")
     st.caption(
         "Supported dates: an exact first-of-month contract start and an explicit full-time headcount. Partial months and FTE conversions are not yet supported. Keep your actual contract dates; drafts remain saveable."
@@ -356,6 +374,7 @@ def pwm_form(plan, role, officer, on_draft=None):
                 None,
             )
             item.escalation_reason = reason
+            pin_route(item, role.future_routing.get("standard_role"))
             validate_pwm(item, plan.profile)
             candidate = plan.model_copy(deep=True)
             apply_change(
@@ -440,7 +459,7 @@ def tender_choices(plan, role, records, benchmark, officer):
 
 
 def keep_common_draft(prefix):
-    st.session_state.plan.basis_drafts["common_future"] = {
+    current_plan().basis_drafts["common_future"] = {
         field: st.session_state.get(prefix + "_" + field)
         for field in ("roles", "percent", "reason", "source")
     }
@@ -586,7 +605,7 @@ def keep_group_draft(prefix):
         "yearly_enabled",
         "yearly_text",
     )
-    saved = st.session_state.plan.basis_drafts.setdefault("common_future", {})
+    saved = current_plan().basis_drafts.setdefault("common_future", {})
     saved.update(
         {
             field: st.session_state[prefix + "_" + field]
@@ -602,7 +621,7 @@ def keep_yearly_table(prefix, key, rows):
         if 0 <= int(index) < len(rows) and "Increase (%)" in change:
             rows[int(index)]["Increase (%)"] = change["Increase (%)"]
     values = [0.0] + [row["Increase (%)"] for row in rows]
-    draft = st.session_state.plan.basis_drafts.setdefault("common_future", {})
+    draft = current_plan().basis_drafts.setdefault("common_future", {})
     draft["yearly_values"] = values
     draft["yearly_text"] = ", ".join("" if x is None else str(x) for x in values)
 
@@ -670,6 +689,62 @@ def yearly_increase_table(plan, prefix, records):
     return values
 
 
+def policy_start_control(plan, purpose="PWM"):
+    if plan.profile.start is not None:
+        return
+    st.caption(
+        "Confirm the exact start for published PWM effective months."
+        if purpose == "PWM"
+        else "Quoted calendar prices or dated component adjustments require an exact start date."
+    )
+    chosen = st.date_input(
+        "Exact start date for " + purpose, value=None, key=retained_key("pwm_start_" + plan.id)
+    )
+    if st.button("Record exact start date", key="pwm_start_record_" + plan.id, disabled=chosen is None):
+        anticipated = plan.profile.costing_start
+        if (chosen.year, chosen.month) != (anticipated.year, anticipated.month):
+            st.info(
+                "Update the anticipated start month in Project details first if the contract starts in a different month."
+            )
+        elif purpose == "PWM" and chosen.day != 1:
+            st.info(
+                "PWM currently supports full calendar months starting on the first day. Keep the actual date; a partial-month PWM method is not established."
+            )
+        elif any(r.included and r.escalation_mode == "quoted schedule" for r in plan.roles) and (
+            chosen.month,
+            chosen.day,
+        ) != (1, 1):
+            st.info(
+                "Calendar-year quoted schedules require a 1 January start. Keep the actual contract date and review a different future-price treatment if needed."
+            )
+        elif chosen == anticipated:
+            plan.profile.start = chosen
+            from services.workflow import invalidate
+
+            invalidate(
+                plan,
+                "escalation",
+                "Officer confirmed exact start matching the anticipated costing date",
+                st.session_state.officer,
+            )
+            st.rerun()
+        else:
+            apply_change(
+                plan,
+                "profile",
+                {**plan.profile.model_dump(mode="json"), "start": chosen.isoformat()},
+                "Officer recorded an exact start day affecting dated adjustments; renew affected confirmations",
+                st.session_state.officer,
+            )
+            plan.ui_step = 0
+            st.rerun()
+
+
+def annual_bar_changed(prefix):
+    st.session_state[prefix + "_percent"] = st.session_state[prefix + "_bar"]
+    keep_group_draft(prefix)
+
+
 def future_screen(plan, records, officer, save):
     from hybrid_inputs import confirmation_errors, show_missing
     from services.future_groups import general_proposal, general_reference, impact
@@ -687,6 +762,59 @@ def future_screen(plan, records, officer, save):
         st.session_state.pop(prefix + "_pwm_roles", None)
     saved = plan.basis_drafts.get("common_future", {})
     roles = {r.id: r for r in plan.roles if r.included}
+    from services.cost_routing import route_errors
+    from services.reference_data import active_snapshot
+
+    unresolved = [r for r in roles.values() if recorded_route(r)["route"] == "unresolved"]
+    for role in unresolved:
+        st.info(
+            f"{role.label}: choose its Standard Role for annual changes. Its original title and starting rate stay recorded."
+        )
+        standards = [r["Role Title"] for r in active_snapshot()["standard_roles"]]
+        choice = st.selectbox(
+            "Standard Role for " + role.label, standards, index=None, key=f"route_choice_{plan.id}_{role.id}"
+        )
+        if st.button(
+            "Use this annual-change classification",
+            key=f"route_apply_{plan.id}_{role.id}",
+            disabled=choice is None,
+        ):
+            item = role.model_copy(deep=True)
+            pin_route(item, choice)
+            apply_change(
+                plan,
+                "role",
+                item.model_dump(mode="json"),
+                "Officer resolved annual-change classification; original title and rates retained",
+                officer,
+            )
+            st.rerun()
+    for role in roles.values():
+        if role.pwm:
+            for error in route_errors(role, enforce_current=True):
+                st.warning(error)
+            if recorded_route(role)["route"] == "general" and st.button(
+                "Use general annual increase for " + role.label, key=f"route_general_{plan.id}_{role.id}"
+            ):
+                item = role.model_copy(deep=True)
+                item.pwm, item.escalation, item.escalation_mode, item.schedule_id = (
+                    None,
+                    [],
+                    "assumption",
+                    None,
+                )
+                pin_route(item, role.future_routing.get("standard_role"))
+                apply_change(
+                    plan,
+                    "role",
+                    item.model_dump(mode="json"),
+                    "Officer accepted the workbook general-increase route; percentage awaits confirmation",
+                    officer,
+                )
+                plan.basis_drafts.setdefault("common_future", {})["pwm_roles"] = [
+                    rid for rid in saved.get("pwm_roles", []) if rid != role.id
+                ]
+                st.rerun()
     hints = [rid for rid, r in roles.items() if pwm_trade_hints(r) or r.pwm]
     pwm_ids = [rid for rid in saved.get("pwm_roles", hints) or [] if rid in roles]
     # Active PWM cannot be silently removed through a grouping correction.
@@ -695,8 +823,20 @@ def future_screen(plan, records, officer, save):
         r.id
         for r in roles.values()
         if not r.pwm
+        and recorded_route(r)["route"] in ("general", "demonstration")
         and (r.escalation_mode == "quoted schedule" or r.policies or len(set(r.escalation[1:])) > 1)
     ]
+    # Distinct constant percentages are also intentional saved profiles. A new
+    # shared recommendation must not flatten them just because each is constant.
+    assumed = [
+        r
+        for r in roles.values()
+        if not r.pwm
+        and r.escalation_mode == "assumption"
+        and recorded_route(r)["route"] in ("general", "demonstration")
+    ]
+    if len({tuple(r.escalation) for r in assumed}) > 1:
+        legacy = list(dict.fromkeys(legacy + [r.id for r in assumed]))
 
     def params(field):
         return dict(key=retained_key(prefix + "_" + field), on_change=keep_group_draft, args=(prefix,))
@@ -706,11 +846,18 @@ def future_screen(plan, records, officer, save):
     pwm_ids = list(
         dict.fromkeys([rid for rid in saved.get("pwm_roles", active) or [] if rid in roles] + active)
     )
+    pwm_ids = list(
+        dict.fromkeys(pwm_ids + [rid for rid, r in roles.items() if recorded_route(r)["route"] == "pwm"])
+    )
+    if not (hints or active) and any(
+        r.escalation_mode == "quoted schedule" or r.policies for r in roles.values()
+    ):
+        policy_start_control(plan, "quoted prices / adjustments")
     st.markdown("### Annual manpower cost increase")
     annual_controls = st.container()
     retain = True if legacy else False
     yearly_enabled, yearly_text, yearly_values = False, "", None
-    with st.expander("Use different increases by year"):
+    with st.expander("Set different increases by year"):
         if legacy:
             st.caption(
                 "Saved yearly prices/profiles and component adjustments are retained. Replacing a profile requires an explicit choice; component adjustments remain subject to overlap review."
@@ -739,20 +886,30 @@ def future_screen(plan, records, officer, save):
         if yearly_enabled:
             yearly_values = yearly_increase_table(plan, prefix, records)
             yearly_text = ", ".join("Unanswered" if x is None else f"{x:g}" for x in yearly_values)
-    general = [rid for rid in roles if rid not in pwm_ids and (not retain or rid not in legacy)]
-    st.markdown("**Applicable manpower**")
-    st.dataframe(
-        [
-            {
-                "Manpower": roles[rid].label,
-                "Quantity": roles[rid].quantity,
-                "Unit": roles[rid].quantity_unit,
-            }
-            for rid in general
-        ],
-        hide_index=True,
-        width="stretch",
+    general = [
+        rid
+        for rid in roles
+        if rid not in pwm_ids
+        and recorded_route(roles[rid])["route"] in ("general", "demonstration")
+        and (not retain or rid not in legacy)
+    ]
+    st.caption(
+        f"Applies to {len(general)} non-PWM roles"
+        + (f"; {len(legacy)} saved profiles retained separately." if retain and legacy else ".")
     )
+    with st.expander("Applicable manpower details"):
+        st.dataframe(
+            [
+                {
+                    "Manpower": roles[rid].label,
+                    "Quantity": roles[rid].quantity,
+                    "Unit": roles[rid].quantity_unit,
+                }
+                for rid in general
+            ],
+            hide_index=True,
+            width="stretch",
+        )
     candidate, proposal_error = plan.model_copy(deep=True), None
     value, reason, source, custom = None, "", "", False
     with annual_controls:
@@ -782,7 +939,15 @@ def future_screen(plan, records, officer, save):
             ):
                 prior_custom = True
             if bm["available"]:
-                if current == 0 and not yearly_enabled:
+                if (
+                    current == 0
+                    and not yearly_enabled
+                    and (
+                        current_basis
+                        or st.session_state.get("storage_revision", 0)
+                        or any(roles[rid].escalation_reason for rid in general)
+                    )
+                ):
                     st.info(
                         "Your saved budget uses 0% annual increase. Keep it if intentional, "
                         "or preview the recommended average below. Your saved budget stays unchanged until confirmation."
@@ -800,24 +965,19 @@ def future_screen(plan, records, officer, save):
                         on_click=select_general_increase,
                         args=(prefix, 0.0, True),
                     )
-                a, b, c = st.columns(3)
-                a.metric("Recommended database average", f"{bm['average'] * 100:.2f}%")
-                b.metric("Lower allowance", f"{bm['minimum'] * 100:.2f}%")
-                c.metric("Higher allowance", f"{bm['maximum'] * 100:.2f}%")
-                st.caption(
-                    f"Observed minimum and maximum from {bm['sample_count']} distinct awarded Office FM manpower schedules. Based on unit-rate movements within each quoted schedule, excluding quantity changes. Synthetic references do not measure historical wage trends."
-                )
-                custom = st.checkbox(
-                    "Use another percentage",
-                    value=bool(saved.get("custom", prior_custom)),
-                    disabled=yearly_enabled,
-                    **params("custom"),
-                )
+                st.caption("Recommended manpower-charge reference; not CPI or an official wage forecast.")
             else:
                 custom = True
                 st.info(
                     "Valid general manpower reference evidence is unavailable (fewer than three comparable schedules). Enter an officer assumption; no average or range is invented."
                 )
+            has_recorded_choice = bool(
+                current_basis
+                or st.session_state.get("storage_revision", 0)
+                or any(roles[rid].escalation_reason for rid in general)
+            )
+            if not has_recorded_choice:
+                current = None  # Empty/default zero profiles are not an officer's 0% decision.
             default = saved.get("percent")
             if default is None:
                 default = (
@@ -827,60 +987,39 @@ def future_screen(plan, records, officer, save):
                     if bm["available"]
                     else None
                 )
+            selection, selection_impact = st.columns([2, 1])
+            if bm["available"]:
+                from selection_controls import reference_bar
 
-            def synced(field):
-                st.session_state[prefix + "_percent"] = st.session_state[prefix + "_" + field]
-                st.session_state[prefix + "_exact"] = st.session_state[prefix + "_percent"]
-                keep_group_draft(prefix)
-
-            if not custom:
-                low, high = round(bm["minimum"] * 100, 2), round(bm["maximum"] * 100, 2)
-                default = round(default if low <= default <= high else bm["average"] * 100, 2)
-                if (
-                    st.session_state.get(prefix + "_percent") is None
-                    or not low <= st.session_state[prefix + "_percent"] <= high
-                ):
-                    st.session_state[prefix + "_percent"] = default
-                st.session_state[prefix + "_exact"] = st.session_state[prefix + "_percent"]
-                if low < high:
-                    st.slider(
-                        "Annual manpower cost increase within observed range (%)",
-                        min_value=low,
-                        max_value=high,
-                        value=None,
-                        step=0.01,
-                        format="%.2f%%",
-                        key=retained_key(prefix + "_percent"),
-                        on_change=synced,
-                        args=("percent",),
+                selected_now = st.session_state.get(prefix + "_percent", default)
+                with selection:
+                    reference_bar(
+                        "Select annual manpower cost increase",
+                        prefix + "_bar",
+                        selected_now,
+                        round(bm["minimum"] * 100, 2),
+                        round(bm["average"] * 100, 2),
+                        round(bm["maximum"] * 100, 2),
+                        annual_bar_changed,
+                        (prefix,),
+                        percent=True,
                         disabled=yearly_enabled,
                     )
-                    position = 100 * (bm["average"] * 100 - low) / (high - low)
-                    st.markdown(
-                        f'<div style="position:relative;height:24px"><span style="position:absolute;left:{max(0, min(95, position)):.2f}%;font-size:0.8rem">&#9670; average</span></div>',
-                        unsafe_allow_html=True,
-                    )
-                st.number_input(
-                    "Selected annual manpower cost increase (%)",
-                    min_value=low,
-                    max_value=high if low < high else None,
-                    step=0.01,
-                    key=retained_key(prefix + "_exact"),
-                    on_change=synced,
-                    args=("exact",),
-                    disabled=yearly_enabled,
-                )
-                value = st.session_state[prefix + "_percent"]
-            else:
-                value = st.number_input(
-                    "Annual manpower cost increase (%)",
-                    value=default,
-                    min_value=-50.0,
-                    max_value=100.0,
-                    step=0.01,
-                    disabled=yearly_enabled,
-                    **params("percent"),
-                )
+            value = selection.number_input(
+                "Selected annual manpower cost increase (%)",
+                value=default,
+                min_value=-50.0,
+                max_value=100.0,
+                step=0.01,
+                format="%.2f",
+                disabled=yearly_enabled,
+                **params("percent"),
+            )
+            custom = (
+                not bm["available"]
+                or value is None
+                or not (round(bm["minimum"] * 100, 2) <= value <= round(bm["maximum"] * 100, 2))
+            )
             if custom or yearly_enabled:
                 if yearly_enabled:
                     st.caption("Using the yearly table below; the constant-percentage controls are inactive.")
@@ -892,7 +1031,9 @@ def future_screen(plan, records, officer, save):
                     else roles[general[0]].escalation_reason
                 )
                 reason = st.text_area(
-                    "Alignment note (optional)", value=saved.get("reason") or prior_note, **params("reason")
+                    "Brief reason for an override or yearly profile (optional)",
+                    value=saved.get("reason") or prior_note,
+                    **params("reason"),
                 )
                 source = st.text_input(
                     "Document reference (optional)",
@@ -930,6 +1071,13 @@ def future_screen(plan, records, officer, save):
                 candidate = general_proposal(
                     plan, records, general, value, reason, source, not custom, officer, yearly_percent=yearly
                 )
+                try:
+                    selection_impact.metric(
+                        "Projected contract budget (SGD)", f"{impact(candidate, records)['Contract']:,.2f}"
+                    )
+                except ValueError:
+                    selection_impact.caption("Complete any PWM setup to see the full impact.")
+
             except ValueError as error:
                 proposal_error = str(error)
         elif general:
@@ -937,125 +1085,119 @@ def future_screen(plan, records, officer, save):
                 "One contract year: starting monthly charges are retained; no anniversary increase is needed."
             )
             candidate = general_proposal(plan, records, general, 0.0, "", "", False, officer)
-    st.markdown("### PWM salary progression")
-    if not active:
-        st.caption("No workers are assigned to PWM salary progression.")
-    st.caption(
-        "For covered cleaning, security, landscape and lift/escalator workers. Confirm eligibility and the known salary component before applying PWM."
-    )
-    with st.container(border=True):
-        choices = list(dict.fromkeys(hints + active))
-        if choices:
-            chosen = st.multiselect(
-                "Workers to check for PWM coverage",
-                choices,
-                default=[rid for rid in pwm_ids if rid in choices],
-                format_func=lambda rid: roles[rid].label,
-                **params("pwm_roles"),
-            )
-            if set(chosen + active) != set(pwm_ids):
-                st.rerun()
+    if hints or active or pwm_ids:
+        st.markdown("### PWM salary progression")
+        policy_start_control(plan)
+        if not active:
             st.caption(
-                "A title suggests a trade only. Confirm eligibility and category before applying salary progression. Recorded PWM stays active until explicitly replaced below."
+                "Complete the PWM worker setup below."
+                if pwm_ids
+                else "No workers are assigned to PWM salary progression."
             )
-        else:
-            st.caption(
-                "No relevant trade workers are in this deployment. Add the applicable trade workers in deployment to set up PWM; general FM and Technician titles do not establish coverage."
-            )
-        if not choices and st.button(
-            "Edit deployment to add PWM workers", key=f"future_edit_pwm_deployment_{plan.id}"
-        ):
-            plan.ui_step = 1
-            st.rerun()
-        for rid in pwm_ids:
-            if not roles[rid].pwm:
-                st.markdown("**Check eligibility: " + roles[rid].label + "**")
-                pwm_form(plan, roles[rid], officer)
-        for rid, role in roles.items():
-            if "pwm_" + rid in plan.basis_drafts:
-                if st.button(
-                    "Revert unfinished PWM draft for " + role.label, key=f"future_revert_pwm_{plan.id}_{rid}"
-                ):
-                    plan.basis_drafts.pop("pwm_" + rid, None)
-                    st.session_state[f"pwm_{plan.id}_{rid}_reset"] = True
-                    st.rerun()
-    if active:
         st.caption(
-            "Title matches suggest trades only. Confirm the category and covered workers, then the known salary component. Calendar months are used; general escalation is not added to the PWM component."
+            "Workbook PWM roles are routed here. Confirm the applicable category, covered workers and known salary component before applying progression."
         )
-
-        def sector_for(rid):
-            item = roles[rid]
-            return (
-                get_schedule(item.pwm.schedule_id)["sector"]
-                if item.pwm
-                else "/".join(sorted(pwm_trade_hints(item))) or "Confirm category"
+        with st.container(border=True):
+            choices = list(dict.fromkeys(hints + active))
+            if choices:
+                prepared_routing = active_snapshot() is not None
+                chosen = st.multiselect(
+                    "Workers to check for PWM coverage",
+                    choices,
+                    default=[rid for rid in pwm_ids if rid in choices],
+                    format_func=lambda rid: roles[rid].label,
+                    **params("pwm_roles"),
+                    disabled=prepared_routing,
+                )
+                if set(chosen + active) != set(pwm_ids):
+                    st.rerun()
+                st.caption(
+                    "The workbook flag selects this route; worker eligibility and category still need confirmation. Recorded PWM remains unchanged until explicitly replaced."
+                )
+            else:
+                st.caption(
+                    "No relevant trade workers are in this deployment. Add the applicable trade workers in deployment to set up PWM; general FM and Technician titles do not establish coverage."
+                )
+            if not choices and st.button(
+                "Edit deployment to add PWM workers", key=f"future_edit_pwm_deployment_{plan.id}"
+            ):
+                plan.ui_step = 1
+                st.rerun()
+            for rid in pwm_ids:
+                if not roles[rid].pwm:
+                    st.markdown("**Check eligibility: " + roles[rid].label + "**")
+                    pwm_form(plan, roles[rid], officer)
+            for rid, role in roles.items():
+                if "pwm_" + rid in plan.basis_drafts:
+                    if st.button(
+                        "Revert unfinished PWM draft for " + role.label,
+                        key=f"future_revert_pwm_{plan.id}_{rid}",
+                    ):
+                        plan.basis_drafts.pop("pwm_" + rid, None)
+                        st.session_state[f"pwm_{plan.id}_{rid}_reset"] = True
+                        st.rerun()
+        if active:
+            st.caption(
+                "Title matches suggest trades only. Confirm the category and covered workers, then the known salary component. Calendar months are used; general escalation is not added to the PWM component."
             )
 
-        last_sector = None
-        for rid in sorted(active, key=sector_for):
-            sector = sector_for(rid)
-            if sector != last_sector:
-                st.markdown(
-                    "#### "
-                    + {
-                        "cleaning": "Cleaning",
-                        "security": "Security",
-                        "landscape": "Landscape",
-                        "lift": "Lift/escalator maintenance",
-                    }.get(sector, sector)
+            def sector_for(rid):
+                item = roles[rid]
+                return (
+                    get_schedule(item.pwm.schedule_id)["sector"]
+                    if item.pwm
+                    else "/".join(sorted(pwm_trade_hints(item))) or "Confirm category"
                 )
-                last_sector = sector
-            role = roles[rid]
-            st.markdown(f"**{role.label} · {role.quantity:g} {role.quantity_unit} confirmed**")
-            if role.pwm:
-                schedule = get_schedule(role.pwm.schedule_id)
-                st.dataframe(
-                    [
-                        {
-                            "Category": schedule["category"],
-                            "Job level": schedule["job_level"],
-                            "Covered workers": role.pwm.covered_quantity,
-                            "Starting salary component (SGD)": role.pwm.starting_salary,
-                            "Source": schedule["source"],
-                            "Published through": schedule["valid_until"],
-                        }
-                    ],
-                    hide_index=True,
-                    width="stretch",
-                )
-                st.caption(
-                    "Recorded PWM salary movements; remaining inclusive charges and uncovered workers stay flat. A separate supported deployment row is needed for a different increase; no salary split is inferred."
-                )
-                try:
-                    validate_pwm(role, plan.profile)
-                    needs_review = False
-                except ValueError:
-                    needs_review = True
-                with st.expander(
-                    "Review or change the recorded PWM setup",
-                    expanded=needs_review or "pwm_" + rid in plan.basis_drafts,
-                ):
+
+            last_sector = None
+            for rid in sorted(active, key=sector_for):
+                sector = sector_for(rid)
+                if sector != last_sector:
+                    st.markdown(
+                        "#### "
+                        + {
+                            "cleaning": "Cleaning",
+                            "security": "Security",
+                            "landscape": "Landscape",
+                            "lift": "Lift/escalator maintenance",
+                        }.get(sector, sector)
+                    )
+                    last_sector = sector
+                role = roles[rid]
+                st.markdown(f"**{role.label} · {role.quantity:g} {role.quantity_unit} confirmed**")
+                if role.pwm:
+                    schedule = get_schedule(role.pwm.schedule_id)
+                    st.dataframe(
+                        [
+                            {
+                                "Category": schedule["category"],
+                                "Job level": schedule["job_level"],
+                                "Covered workers": role.pwm.covered_quantity,
+                                "Starting salary component (SGD)": role.pwm.starting_salary,
+                                "Source": schedule["source"],
+                                "Published through": schedule["valid_until"],
+                            }
+                        ],
+                        hide_index=True,
+                        width="stretch",
+                    )
+                    st.caption(
+                        "Recorded PWM salary movements; remaining inclusive charges and uncovered workers stay flat. A separate supported deployment row is needed for a different increase; no salary split is inferred."
+                    )
+                    try:
+                        validate_pwm(role, plan.profile)
+                        needs_review = False
+                    except ValueError:
+                        needs_review = True
+                    with st.expander(
+                        "Review or change the recorded PWM setup",
+                        expanded=needs_review or "pwm_" + rid in plan.basis_drafts,
+                    ):
+                        pwm_form(plan, role, officer)
+                else:
                     pwm_form(plan, role, officer)
-            else:
-                pwm_form(plan, role, officer)
-            if role.pwm and st.button(
-                "Move this row to the general increase group", key=f"future_move_{plan.id}_{rid}"
-            ):
-                payload = role.model_dump(mode="json")
-                payload.update(pwm=None, escalation=[], escalation_reason="")
-                apply_change(
-                    plan,
-                    "role",
-                    payload,
-                    "Officer explicitly replaced PWM grouping; new annual assumption awaiting confirmation",
-                    officer,
-                )
-                group_draft = plan.basis_drafts.setdefault("common_future", {})
-                group_draft["pwm_roles"] = [item for item in pwm_ids if item != rid]
-                plan.basis_drafts.pop("pwm_" + rid, None)
-                st.session_state[prefix + "_group_reset"] = True
-                st.rerun()
+    else:
+        st.caption("PWM: no covered trade roles are assigned to this deployment.")
     retained_inputs = {
         key: value
         for key, value in plan.basis_drafts.items()
@@ -1164,11 +1306,6 @@ def future_screen(plan, records, officer, save):
         st.caption(
             f"Future cost change from flat starting charges: SGD {preview['Change from flat starting charges']:,.2f}."
         )
-        if recorded:
-            st.metric(
-                "Change from recorded contract budget (SGD)",
-                f"{preview['Contract'] - recorded['Contract']:,.2f}",
-            )
         st.caption(
             "Starting charges and quantities are unchanged. Saving preserves the draft; this preview does not approve it."
         )
@@ -1219,7 +1356,7 @@ def future_screen(plan, records, officer, save):
             "Review the retained unfinished inputs above, or explicitly keep the recorded values before confirming the grouped preview."
         )
     errors += [
-        f"{roles[rid].label}: complete PWM-specific setup, or move this row to the general group."
+        f"{roles[rid].label}: complete PWM category, covered-worker and salary-component setup."
         for rid in pwm_ids
         if not roles[rid].pwm
     ]

@@ -8,6 +8,9 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+REFERENCE_MODEL_VERSION = 1
+OFFICER_UX_VERSION = 11
+
 
 def now() -> str:
     return datetime.now(UTC).isoformat()
@@ -137,7 +140,9 @@ class Role(StrictModel):
     rate: float | None = Field(default=None, gt=0, le=10000000)
     rate_reason: str = ""
     rate_notes: str = ""
-    rate_origin: Literal["Officer assumption", "Synthetic benchmark selection"] = "Officer assumption"
+    rate_origin: Literal[
+        "Officer assumption", "Synthetic benchmark selection", "Prepared reference selection"
+    ] = "Officer assumption"
     rate_basis: Literal["inclusive monthly per head"] = "inclusive monthly per head"
     benchmark_status: Literal["awarded", "submitted", "both"] = "awarded"
     benchmark_year: int | None = Field(default=None, ge=1900, le=2200)
@@ -147,6 +152,7 @@ class Role(StrictModel):
     escalation_mode: Literal["assumption", "quoted schedule"] = "assumption"
     schedule_id: str | None = None
     pwm: PWMConfig | None = None
+    future_routing: dict = Field(default_factory=dict)
     yearly_quantities: list[float] = Field(default_factory=list)
     policies: list[PolicyAdjustment] = Field(default_factory=list)
 

@@ -144,13 +144,14 @@ def officer():
     return st.session_state.officer.strip() or "Local reviewing officer"
 
 
+def reference_year_selected(project_id):
+    st.session_state["pricing_year_change_" + project_id] = True
+
+
 def sync_controls(prefix, signature, values):
-    """Refresh stale widgets after a retained/model/form change, before rendering them."""
-    if st.session_state.get(prefix + "_model") != signature:
-        for suffix, value in values.items():
-            st.session_state[prefix + suffix] = value
-        st.session_state[prefix + "_model"] = signature
-    ui_drafts.restore_controls_after_sync(st.session_state.plan, prefix)
+    from services.ui_context import sync_controls as shared_sync
+
+    shared_sync(prefix, signature, values)
 
 
 def changed_role(role_id, field, widget_key, other_key=None, transform=None, explicit=False):
@@ -204,7 +205,10 @@ if "saved_fingerprint" not in st.session_state:
 def unsaved():
     return (
         fingerprint(st.session_state.plan) != st.session_state.saved_fingerprint
-        or bool(st.session_state.get(project_prefix(st.session_state.plan) + "_error"))
+        or (
+            bool(st.session_state.get(project_prefix(st.session_state.plan) + "_error"))
+            and not st.session_state.plan.basis_drafts.get("project_text")
+        )
         or ui_drafts.unsaved(st.session_state.plan, pending_control_errors(st.session_state.plan))
     )
 
@@ -247,7 +251,7 @@ def new_session(new_plan, revision=0):
 
 def save():
     error = st.session_state.get(project_prefix(st.session_state.plan) + "_error")
-    if error:
+    if error and not st.session_state.plan.basis_drafts.get("project_text"):
         st.error("Correct these entries before saving: " + error)
         return False
     try:
@@ -270,7 +274,7 @@ def save():
 
 def example_project():
     example = demo_plan()
-    rows = comparison_rows(example)
+    rows = comparison_rows(example, common=False)
     for row in rows:
         if row["Proposed quantity / FTE"] is None:
             row["Proposed quantity / FTE"] = 0.0
@@ -289,6 +293,7 @@ def switch_project(new_plan, revision=0):
 
 def request_guidance(message, current_stage, kind="message"):
     """Keep failed input outside approved facts, with an explicit retry rather than an automatic repeat."""
+    before_deployment = plan.model_copy(deep=True) if current_stage <= 3 else None
     try:
         with st.spinner("Thinking…"):
             converse(plan, records, message, create_client(cfg.api_key), cfg.model, STAGES[current_stage])
@@ -305,6 +310,10 @@ def request_guidance(message, current_stage, kind="message"):
             else "The guidance turn could not finish. No proposed changes were applied.",
         }
         return False
+    if before_deployment is not None:
+        from services.deployment_review import retain_assistant_proposals
+
+        retain_assistant_proposals(plan, before_deployment)
     st.session_state.pop("failed_turn", None)
     st.session_state.hybrid_epoch = st.session_state.get("hybrid_epoch", 0) + 1
     st.session_state.six_epoch = st.session_state.get("six_epoch", 0) + 1
@@ -319,9 +328,11 @@ with st.sidebar:
         st.success(st.session_state.pop("project_notice"))
     if st.button("New blank project", width="stretch"):
         switch_project(Plan())
-    if st.button("Load synthetic example", width="stretch"):
-        switch_project(example_project())
-    st.caption("The example contains invented officer inputs. Review and confirm every stage.")
+    if st.button("Load Site Xtown example", key="load_xtown_example", width="stretch"):
+        from services.xtown_example import xtown_plan
+
+        switch_project(xtown_plan(records))
+    st.caption("Site Xtown example: a fully populated 3 + 3-year budget, ready for your review.")
     saved = store.list(owner)
     if saved:
         selected = st.selectbox(
@@ -358,7 +369,7 @@ with st.sidebar:
             if no.button("Cancel", key="cancel_delete_project"):
                 st.session_state.pop("delete_project_target", None)
                 st.rerun()
-    if st.button("Save project", width="stretch"):
+    if st.button("Save draft", width="stretch"):
         if save():
             st.rerun()
     switch_target = st.session_state.get("switch_target")
@@ -388,6 +399,12 @@ with st.sidebar:
         mime="application/json",
         width="stretch",
     )
+    with st.expander("Developer reference diagnostics"):
+        from services.reference_data import metadata
+
+        reference_status = metadata()
+        st.caption("Active workbook: " + reference_status.get("source_name", "Synthetic demonstration"))
+        st.caption("Dataset: " + reference_status["dataset_id"])
     with st.expander("Restore a downloaded snapshot"):
         snapshot = st.file_uploader("Project JSON", type=["json"], key="snapshot")
         if snapshot and st.button("Restore as a new draft"):
@@ -436,8 +453,7 @@ def show_save_status():
 
 show_save_status()
 
-st.caption("AI-POWERED FM MANPOWER COST ASSISTANT")
-st.title("Build a new manpower plan")
+
 project_name = working_draft(plan).profile.name
 if project_name != "Untitled project":
     st.caption(f"Project: {project_name}")
@@ -449,8 +465,21 @@ if "input_error" in st.session_state:
 if "next_stage" in st.session_state:
     plan.ui_step = step_for_stage(st.session_state.pop("next_stage"))
 show_progress(plan)
+st.markdown(
+    "<style>[data-testid='stLayoutWrapper']:has(> .st-key-five_step_navigation)"
+    "{position:sticky;top:2.5rem;z-index:20;background:var(--background-color,#f8fafc);}"
+    ".st-key-five_step_navigation{position:static!important;}"
+    ".st-key-five_step_navigation button{min-height:3rem;padding:.3rem .35rem;}"
+    ".st-key-five_step_navigation button p{font-size:.8rem;line-height:1.15;"
+    "white-space:normal!important;overflow:visible;text-overflow:clip;}"
+    "[data-testid='stMetricLabel'],[data-testid='stMetricLabel'] p"
+    "{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;}"
+    "[data-testid='stMetricValue']{font-size:clamp(1rem,1.65vw,1.65rem)!important;}"
+    "</style>",
+    unsafe_allow_html=True,
+)
 ui_step = plan.ui_step
-stage = [0, 2, 3, 4, 6, 7][ui_step]
+stage = [0, 3, 3, 4, 6, 7][ui_step]
 st.session_state.stage = stage
 phase_label = [
     "Project and contract details",
@@ -461,33 +490,64 @@ phase_label = [
     "Full contract budget and export",
 ][ui_step]
 st.session_state.review_open = ui_step >= 3
+# Later screens remain inspectable without approving prerequisites.
+prerequisite = {
+    3: ("plan", 1, "Confirm deployment before selecting starting rates."),
+    4: ("base", 3, "Confirm starting rates before reviewing annual changes."),
+    5: ("escalation", 4, "Confirm annual changes before viewing a complete budget."),
+}.get(ui_step)
+if prerequisite and prerequisite[0] not in plan.confirmations:
+    st.info(prerequisite[2])
+    target = prerequisite[1]
+    if st.button(
+        "Open " + {1: "Deployment", 3: "Starting rates", 4: "Annual changes"}[target],
+        key="open_required_step",
+    ):
+        plan.ui_step = target
+        st.rerun()
+    navigation(plan)
+    show_save_status()
+    st.stop()
+
 if stage == 4:
-    reference_years = sorted({r["pricing_year"] for r in records})
-    existing_years = {r.benchmark_year for r in plan.roles if r.included and r.benchmark_year is not None}
-    desired_year = (
-        next(iter(existing_years))
-        if len(existing_years) == 1
-        else (
-            plan.profile.start_year
-            or (plan.profile.start.year if plan.profile.start else reference_years[-1])
+    from services.reference_data import prepared
+
+    if prepared(records):
+        initialise_rates(plan, records, None)
+    else:
+        reference_years = sorted({r["pricing_year"] for r in records})
+        existing_years = {r.benchmark_year for r in plan.roles if r.included and r.benchmark_year is not None}
+        desired_year = (
+            next(iter(existing_years))
+            if len(existing_years) == 1
+            else (
+                plan.profile.start_year
+                or (plan.profile.start.year if plan.profile.start else reference_years[-1])
+            )
         )
-    )
-    default_year = desired_year if desired_year in reference_years else reference_years[-1]
-    reference_year = st.selectbox(
-        "Reference pricing year",
-        reference_years,
-        index=reference_years.index(default_year),
-        key=retained_key(f"rate_{plan.id}_common_year"),
-    )
-    st.caption(
-        "All references below use this pricing year and SGD inclusive monthly charges per head. No automatic time-normalisation is applied."
-    )
-    initialise_rates(plan, records, reference_year)
-    contract_year = plan.profile.start_year or (plan.profile.start.year if plan.profile.start else None)
-    if contract_year and reference_year != contract_year:
-        st.warning(
-            f"References are priced in {reference_year}; the contract starts in {contract_year}. No inflation or time adjustment has been applied. Select and document an explicit allowance for the intended contract period."
+        default_year = desired_year if desired_year in reference_years else reference_years[-1]
+        reference_year = st.selectbox(
+            "Reference pricing year",
+            reference_years,
+            index=reference_years.index(default_year),
+            key=retained_key(f"rate_{plan.id}_common_year"),
+            on_change=reference_year_selected,
+            args=(plan.id,),
         )
+        st.caption(
+            "All references below use this pricing year and SGD inclusive monthly charges per head. No automatic time-normalisation is applied."
+        )
+        initialise_rates(
+            plan,
+            records,
+            reference_year,
+            update_existing=st.session_state.pop("pricing_year_change_" + plan.id, False),
+        )
+        contract_year = plan.profile.start_year or (plan.profile.start.year if plan.profile.start else None)
+        if contract_year and reference_year != contract_year:
+            st.warning(
+                f"References are priced in {reference_year}; the contract starts in {contract_year}. No inflation or time adjustment has been applied. Select and document an explicit allowance for the intended contract period."
+            )
 
 
 def confirmation(gate, label, primary=True):
@@ -519,208 +579,216 @@ def confirmation(gate, label, primary=True):
 
 if stage <= 3:
     render_inputs(plan, cfg, request_guidance, stage, save)
-if ui_step <= 1:
+if ui_step == 0:
     navigation(plan)
     show_save_status()
     st.stop()
 
 left, right = st.container(), st.container()
-with (
-    st.expander(
-        "Discuss changes or ask the assistant",
-        expanded=bool(st.session_state.get("manpower_help_open") or plan.pending),
-    )
-    if ui_step == 2
-    else st.expander(
-        "Ask about this budget" if ui_step == 5 else "Ask the assistant or add supporting documents"
-    )
-):
-    if ui_step == 5:
-        st.caption("Ask why costs change, what an assumption means, or what still needs checking.")
-    elif ui_step >= 3:
-        st.subheader(f"Ask about {phase_label.lower()}")
-    elif not plan.chat:
-        st.caption(
-            "Ask about a discrepancy or describe the change you are considering. Your recorded answers are retained."
+if ui_step != 1 or st.session_state.get("manpower_help_open") or plan.pending:
+    with (
+        st.container(border=True)
+        if ui_step == 1
+        else st.expander(
+            "Ask about this budget" if ui_step == 5 else "Ask the assistant or add supporting documents"
         )
-    starters = [
-        "Tell me your project brief: what the FM team should do, the start year and base/option years, any roles and quantities you already know, and what existing staff or contractors handle. Share everything you have; I’ll ask only about the remaining material gaps.",
-        "Which duties should this team cover? Tell me which services other teams or contractors already handle.",
-        "Which roles do you have in mind? For continuous coverage, describe the hours and number of simultaneous posts.",
-        "Let’s check the proposed roles against the duties before considering prices. Is any responsibility missing or covered twice?",
-        "We can now review monthly rates against the synthetic references. Tell me which role you want to start with.",
-        "Review the first-year overview. Is there an assumption you would like to change before looking at future years?",
-        "How should future prices be treated? We can review price schedules and clearly labelled officer assumptions.",
-        "Let’s review the remaining gaps. Which finding would you like to address first?",
-        "The contract overview brings the annual costs together. Ask about an amount or open the review to inspect charts and export evidence.",
-        "Review the budget and its qualifications before recording your final confirmation.",
-    ]
-    if plan.chat:
-        st.caption("Continue from your answers below. You can correct an earlier detail at any time.")
-    with st.container(border=False):
-        if not plan.chat and stage >= 4:
-            with st.chat_message("assistant"):
-                st.write(starters[stage])
-        for m in plan.chat[-2:]:
-            with st.chat_message(m["role"]):
-                st.markdown(m["content"])
-        if len(plan.chat) > 2:
-            with st.expander("Earlier conversation"):
-                for old_message in plan.chat[:-2]:
-                    st.write(old_message["content"])
-    with st.expander("Add supporting documents, if you have any"):
-        st.caption(
-            "Optional. Your brief and manpower table are enough to start; attach a document only if it helps the review."
-        )
-        uploaded = st.file_uploader(
-            "TXT, Markdown or text PDF (up to 5 MB)", type=["txt", "md", "pdf"], key="document"
-        )
-        if uploaded and st.button("Preserve document for review"):
-            try:
-                doc = preserve_document(uploaded.name, uploaded.getvalue())
-                if not any(d["sha256"] == doc["sha256"] for d in plan.documents):
-                    plan.documents.append(doc)
-                    invalidate(
-                        plan, "profile", "Added supporting document; review operational profile", officer()
-                    )
-                st.success("Original preserved. Extracted text is unvalidated and cannot enter benchmarks.")
-            except ValueError as e:
-                st.error(str(e))
-        for d in plan.documents:
-            st.caption(f"{d['name']}: {d['extraction_note']}")
-            st.download_button(
-                "Download preserved original",
-                base64.b64decode(d["raw_base64"]),
-                file_name=d["name"],
-                key=d["sha256"],
-            )
-    st.caption(
-        "Sending a message or requesting a review uses OpenAI. Editing, navigation and confirmations make no automatic API call."
-    )
-    message = st.chat_input(
-        "Describe, revise or ask a targeted question", disabled=not (cfg.api_key and cfg.model)
-    )
-    if message:
-        request_guidance(message, stage)
-        st.rerun()
-    failed = st.session_state.get("failed_turn")
-    if failed and failed["project_id"] == plan.id:
-        st.warning(failed["error"])
-        if failed["kind"] == "message":
-            st.caption("Your message is kept below. Edit it if needed, then retry when ready.")
-            retry_message = st.text_area(
-                "Message kept for retry",
-                value=failed["message"],
-                key=retained_key(f"retry_text_{failed['id']}"),
-                height=100,
-            )
-        else:
+    ):
+        if ui_step == 5:
+            st.caption("Ask why costs change, what an assumption means, or what still needs checking.")
+        elif ui_step >= 3:
+            st.subheader(f"Ask about {phase_label.lower()}")
+        elif not plan.chat:
             st.caption(
-                "Your confirmation is recorded. Retry to get the next question; you do not need to confirm again."
+                "Ask about a discrepancy or describe the change you are considering. Your recorded answers are retained."
             )
-            retry_message = failed["message"]
-        if failed["stage"] != stage:
-            st.info("The journey has moved on. Continue in the conversation using the current step.")
-        elif st.button(
-            "Retry message" if failed["kind"] == "message" else "Retry next question",
-            key="retry_failed_message",
-            disabled=not (retry_message.strip() and cfg.api_key and cfg.model),
-        ):
-            request_guidance(retry_message, stage, failed["kind"])
-            st.rerun()
-        if st.button("Dismiss retry", key="dismiss_failed_message"):
-            st.session_state.pop("failed_turn", None)
-            st.rerun()
-    if plan.pending and (plan.review_checkpoint == "manpower" or stage >= 4):
-        st.subheader("Ready for your review" if plan.review_checkpoint else "Here is what I understand")
-        st.caption("Review this decision, or correct it in the conversation before confirming.")
-        draft = working_draft(plan)
-        if any(p["kind"] == "profile" for p in plan.pending):
-            p = draft.profile
-            st.write(f"**Site:** {p.operational_type or 'Unknown'} · {p.locations or 'Location unknown'}")
-            st.write(
-                f"**Contract:** {p.start or p.start_year or 'Start year unknown'} · "
-                f"{p.base_years if p.base_years is not None else '?'} base years + "
-                f"{p.option_years if p.option_years is not None else '?'} optional years"
+        starters = [
+            "Tell me your project brief: what the FM team should do, the start year and base/option years, any roles and quantities you already know, and what existing staff or contractors handle. Share everything you have; I’ll ask only about the remaining material gaps.",
+            "Which duties should this team cover? Tell me which services other teams or contractors already handle.",
+            "Which roles do you have in mind? For continuous coverage, describe the hours and number of simultaneous posts.",
+            "Let’s check the proposed roles against the duties before considering prices. Is any responsibility missing or covered twice?",
+            "We can now review monthly rates against the active references. Tell me which role you want to start with.",
+            "Review the first-year overview. Is there an assumption you would like to change before looking at future years?",
+            "How should future prices be treated? We can review price schedules and clearly labelled officer assumptions.",
+            "Let’s review the remaining gaps. Which finding would you like to address first?",
+            "The contract overview brings the annual costs together. Ask about an amount or open the review to inspect charts and export evidence.",
+            "Review the budget and its qualifications before recording your final confirmation.",
+        ]
+        if plan.chat:
+            st.caption("Continue from your answers below. You can correct an earlier detail at any time.")
+        with st.container(border=False):
+            if not plan.chat and stage >= 4:
+                with st.chat_message("assistant"):
+                    st.write(starters[stage])
+            for m in plan.chat[-2:]:
+                with st.chat_message(m["role"]):
+                    st.markdown(m["content"])
+            if len(plan.chat) > 2:
+                with st.expander("Earlier conversation"):
+                    for old_message in plan.chat[:-2]:
+                        st.write(old_message["content"])
+        with st.expander("Add supporting documents, if you have any"):
+            st.caption(
+                "Optional. Your brief and manpower table are enough to start; attach a document only if it helps the review."
             )
-            st.write(f"**Operations:** {p.operating_hours or 'Opening/coverage hours unknown'}")
-            st.write(f"**Assets:** {p.assets or 'Unknown; no equipment assumed'}")
-        duties = [p["payload"] for p in plan.pending if p["kind"] == "responsibility"]
-        if duties:
-            st.dataframe(
-                [{"Duty": d["description"], "Covered by": d["provider"] or d["coverage"]} for d in duties],
-                hide_index=True,
-                width="stretch",
-                placeholder="",
+            uploaded = st.file_uploader(
+                "TXT, Markdown or text PDF (up to 5 MB)", type=["txt", "md", "pdf"], key="document"
             )
-        roles = [p["payload"] for p in plan.pending if p["kind"] == "role"]
-        if roles:
-            rows = []
-            officer_quantities = {r["id"]: r["quantity"] for r in plan.officer_manpower_input}
-            for r in roles:
-                row = {"Role": r["label"], "Quantity": r["quantity"], "Basis": r["quantity_reason"]}
-                if r["id"] in officer_quantities and officer_quantities[r["id"]] != r["quantity"]:
-                    row["Your entered quantity"] = officer_quantities[r["id"]]
-                if "plan" in plan.confirmations:
-                    row["Monthly rate (SGD)"] = r["rate"]
-                if plan.review_checkpoint == "escalation":
-                    row["Yearly changes (%)"] = [100 * x for x in r["escalation"]]
-                    row["Future-price basis"] = r["escalation_reason"]
-                rows.append(row)
-            st.dataframe(rows, hide_index=True, width="stretch", placeholder="")
-        decisions = [p["payload"] for p in plan.pending if p["kind"] == "decision"]
-        if decisions:
-            current = {f.id: f for f in findings(plan, records)}
-            st.dataframe(
-                [
-                    {
-                        "Finding": current[d["finding_id"]].message,
-                        "Decision": d["status"],
-                        "Your justification": d["justification"],
-                    }
-                    for d in decisions
-                ],
-                hide_index=True,
-                width="stretch",
-                placeholder="",
-            )
-        checkpoint_labels = {
-            "requirements": "requirements",
-            "manpower": "manpower plan",
-            "rates": "monthly rates and base-year overview",
-            "escalation": "future cost profile",
-            "validation": "finding decisions",
-        }
-        action = (
-            (
-                "Confirm manpower plan and continue to rates"
-                if plan.review_checkpoint == "manpower"
-                else "Confirm " + checkpoint_labels[plan.review_checkpoint] + " and continue"
-            )
-            if plan.review_checkpoint
-            else "Use these details"
-        )
-        errors = (
-            confirmation_errors(plan, st.session_state.officer, records, checkpoint=plan.review_checkpoint)
-            if plan.review_checkpoint
-            else []
-        )
-        show_missing(errors)
-        if st.button(action, key="apply_reviewed_details", type="primary", disabled=bool(errors)):
-            try:
-                if plan.review_checkpoint:
-                    st.session_state.next_stage = accept_review(plan, st.session_state.officer, records)
-                    plan.ui_step = step_for_stage(st.session_state.next_stage)
-                    save()
-                else:
-                    apply_pending(plan, officer())
-                st.session_state.review_open = st.session_state.get("next_stage", stage) >= 4
-                st.rerun()
-            except ValueError as e:
-                st.error(str(e))
+            if uploaded and st.button("Preserve document for review"):
+                try:
+                    doc = preserve_document(uploaded.name, uploaded.getvalue())
+                    if not any(d["sha256"] == doc["sha256"] for d in plan.documents):
+                        plan.documents.append(doc)
+                        invalidate(
+                            plan,
+                            "profile",
+                            "Added supporting document; review operational profile",
+                            officer(),
+                        )
+                    st.success(
+                        "Original preserved. Extracted text is unvalidated and cannot enter benchmarks."
+                    )
+                except ValueError as e:
+                    st.error(str(e))
+            for d in plan.documents:
+                st.caption(f"{d['name']}: {d['extraction_note']}")
+                st.download_button(
+                    "Download preserved original",
+                    base64.b64decode(d["raw_base64"]),
+                    file_name=d["name"],
+                    key=d["sha256"],
+                )
         st.caption(
-            "The assistant cannot approve your budget or update historical evidence. You confirm each decision."
+            "Sending a message or requesting a review uses OpenAI. Editing, navigation and confirmations make no automatic API call."
         )
+        message = st.chat_input(
+            "Describe, revise or ask a targeted question", disabled=not (cfg.api_key and cfg.model)
+        )
+        if message:
+            request_guidance(message, stage)
+            st.rerun()
+        failed = st.session_state.get("failed_turn")
+        if failed and failed["project_id"] == plan.id:
+            st.warning(failed["error"])
+            if failed["kind"] == "message":
+                st.caption("Your message is kept below. Edit it if needed, then retry when ready.")
+                retry_message = st.text_area(
+                    "Message kept for retry",
+                    value=failed["message"],
+                    key=retained_key(f"retry_text_{failed['id']}"),
+                    height=100,
+                )
+            else:
+                st.caption(
+                    "Your confirmation is recorded. Retry to get the next question; you do not need to confirm again."
+                )
+                retry_message = failed["message"]
+            if failed["stage"] != stage:
+                st.info("The journey has moved on. Continue in the conversation using the current step.")
+            elif st.button(
+                "Retry message" if failed["kind"] == "message" else "Retry next question",
+                key="retry_failed_message",
+                disabled=not (retry_message.strip() and cfg.api_key and cfg.model),
+            ):
+                request_guidance(retry_message, stage, failed["kind"])
+                st.rerun()
+            if st.button("Dismiss retry", key="dismiss_failed_message"):
+                st.session_state.pop("failed_turn", None)
+                st.rerun()
+        if plan.pending and ui_step != 1 and (plan.review_checkpoint == "manpower" or stage >= 4):
+            st.subheader("Ready for your review" if plan.review_checkpoint else "Here is what I understand")
+            st.caption("Review this decision, or correct it in the conversation before confirming.")
+            draft = working_draft(plan)
+            if any(p["kind"] == "profile" for p in plan.pending):
+                p = draft.profile
+                st.write(f"**Site:** {p.operational_type or 'Unknown'} · {p.locations or 'Location unknown'}")
+                st.write(
+                    f"**Contract:** {p.start or p.start_year or 'Start year unknown'} · "
+                    f"{p.base_years if p.base_years is not None else '?'} base years + "
+                    f"{p.option_years if p.option_years is not None else '?'} optional years"
+                )
+                st.write(f"**Operations:** {p.operating_hours or 'Opening/coverage hours unknown'}")
+                st.write(f"**Assets:** {p.assets or 'Unknown; no equipment assumed'}")
+            duties = [p["payload"] for p in plan.pending if p["kind"] == "responsibility"]
+            if duties:
+                st.dataframe(
+                    [
+                        {"Duty": d["description"], "Covered by": d["provider"] or d["coverage"]}
+                        for d in duties
+                    ],
+                    hide_index=True,
+                    width="stretch",
+                    placeholder="",
+                )
+            roles = [p["payload"] for p in plan.pending if p["kind"] == "role"]
+            if roles:
+                rows = []
+                officer_quantities = {r["id"]: r["quantity"] for r in plan.officer_manpower_input}
+                for r in roles:
+                    row = {"Role": r["label"], "Quantity": r["quantity"], "Basis": r["quantity_reason"]}
+                    if r["id"] in officer_quantities and officer_quantities[r["id"]] != r["quantity"]:
+                        row["Your entered quantity"] = officer_quantities[r["id"]]
+                    if "plan" in plan.confirmations:
+                        row["Monthly rate (SGD)"] = r["rate"]
+                    if plan.review_checkpoint == "escalation":
+                        row["Yearly changes (%)"] = [100 * x for x in r["escalation"]]
+                        row["Future-price basis"] = r["escalation_reason"]
+                    rows.append(row)
+                st.dataframe(rows, hide_index=True, width="stretch", placeholder="")
+            decisions = [p["payload"] for p in plan.pending if p["kind"] == "decision"]
+            if decisions:
+                current = {f.id: f for f in findings(plan, records)}
+                st.dataframe(
+                    [
+                        {
+                            "Finding": current[d["finding_id"]].message,
+                            "Decision": d["status"],
+                            "Your justification": d["justification"],
+                        }
+                        for d in decisions
+                    ],
+                    hide_index=True,
+                    width="stretch",
+                    placeholder="",
+                )
+            checkpoint_labels = {
+                "requirements": "requirements",
+                "manpower": "manpower plan",
+                "rates": "monthly rates and base-year overview",
+                "escalation": "future cost profile",
+                "validation": "finding decisions",
+            }
+            action = (
+                (
+                    "Confirm manpower plan and continue to rates"
+                    if plan.review_checkpoint == "manpower"
+                    else "Confirm " + checkpoint_labels[plan.review_checkpoint] + " and continue"
+                )
+                if plan.review_checkpoint
+                else "Use these details"
+            )
+            errors = (
+                confirmation_errors(
+                    plan, st.session_state.officer, records, checkpoint=plan.review_checkpoint
+                )
+                if plan.review_checkpoint
+                else []
+            )
+            show_missing(errors)
+            if st.button(action, key="apply_reviewed_details", type="primary", disabled=bool(errors)):
+                try:
+                    if plan.review_checkpoint:
+                        st.session_state.next_stage = accept_review(plan, st.session_state.officer, records)
+                        plan.ui_step = step_for_stage(st.session_state.next_stage)
+                        save()
+                    else:
+                        apply_pending(plan, officer())
+                    st.session_state.review_open = st.session_state.get("next_stage", stage) >= 4
+                    st.rerun()
+                except ValueError as e:
+                    st.error(str(e))
+            st.caption(
+                "The assistant cannot approve your budget or update historical evidence. You confirm each decision."
+            )
 
 if ui_step <= 2:
     navigation(plan)
@@ -730,7 +798,7 @@ if ui_step <= 2:
 
 with right:
     st.divider()
-    if ui_step not in (4, 5):
+    if ui_step not in (3, 4, 5):
         st.caption(
             f"{'Working proposal awaiting your confirmation' if plan.working_notes or plan.pending else budget_status(plan, records)} · Version {plan.version}"
         )

@@ -24,14 +24,13 @@ def test_results_tabs_and_components_are_formatted_without_inapplicable_pwm(monk
     assert not any(x.value == "### What needs your attention" for x in at.markdown)
     assert not any("PWM:" in x.value for x in at.markdown)
     annual = json.loads(at.get("plotly_chart")[0].proto.spec)
-    assert [t["name"] for t in annual["data"]] == ["Starting-rate cost"]
-    totals = at.dataframe[0].value
-    assert totals.iloc[0]["Annual cost (SGD)"] == "96,000.00"
-    assert totals.iloc[1]["Change (%)"] == "0.00%"
-    at.radio(key=f"final_budget_view_{p.id}").set_value("Cost components").run()
+    assert [t["name"] for t in annual["data"]] == ["Current headcount cost"]
+    totals = next(d.value for d in at.dataframe if "Annual total" in d.value.columns)
+    assert totals.iloc[0]["Annual total"] == 96000
+    assert totals.iloc[1]["Change from prior year (%)"] == 0
     assert not at.exception
-    detail = at.dataframe[0].value
-    assert "Starting-rate manpower cost" in detail and "PWM increase" not in detail
+    detail = totals
+    assert "Current headcount at starting rates" in detail and "PWM increase" in detail
     assert at.session_state["plan"].roles[0].escalation == [0, 0]
     assert not at.get("json")
     assert not any("technical records" in x.label for x in at.expander)
@@ -79,17 +78,17 @@ def test_mixed_budget_components_and_scenario_views_reconcile(monkeypatch, tmp_p
     before = p.model_dump(mode="json")
     at.session_state["plan"] = p
     at.run()
-    at.radio(key=f"final_budget_view_{p.id}").set_value("Cost components").run()
     assert not at.exception
     result = budget(p, load_records())
-    frame = at.dataframe[0].value
+    frame = next(d.value for d in at.dataframe if "Annual total" in d.value.columns)
     assert not any("Unpublished periods: unselected" in x.value for x in at.caption)
     assert "PWM increase" in frame
-    assert sum(float(v.replace(",", "")) for v in frame["Annual cost (SGD)"]) == pytest.approx(
+    assert sum(float(str(v).replace(",", "")) for v in frame["Annual total"]) == pytest.approx(
         result["contract_total"]
     )
-    assert any(x.label == "Change annual increase in Step 5" for x in at.button)
-    assert any("+0.00" in x.value and "vs selected" in x.value for x in at.caption)
+    assert any(x.label == "Change annual increase in Step 4" for x in at.button)
+    scenarios = next(d.value for d in at.dataframe if "Scenario" in d.value.columns)
+    assert scenarios.iloc[1]["Difference from selected (SGD)"] == 0
     after = at.session_state["plan"].model_dump(mode="json")
     assert {k for k in before if before[k] != after[k]} <= {"input_steps_completed"}
     assert not after["confirmations"].get("final")

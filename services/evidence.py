@@ -20,6 +20,7 @@ ROLES = [
     "Customer Service Officer",
     "Environmental Engineer",
 ]
+LEGACY_ROLES = list(ROLES)
 ALIASES = {
     "facility manager": "Facilities Manager",
     "facilities manager (fm)": "Facilities Manager",
@@ -33,6 +34,10 @@ ALIASES = {
 
 
 def map_role(label: str) -> str | None:
+    from services.reference_data import active_snapshot, title_mapping
+
+    if active_snapshot() is not None:
+        return title_mapping(label)
     # Never conflate Events Manager or M&E Engineer with unrelated titles.
     return next(
         (r for r in ROLES if r.casefold() == label.strip().casefold()), ALIASES.get(label.strip().casefold())
@@ -66,6 +71,17 @@ class EvidenceRow(StrictModel):
 
 
 def load_records() -> list[dict]:
+    from services.reference_data import active_snapshot
+
+    snapshot = active_snapshot()
+    if snapshot is not None:
+        ROLES[:] = [r["Role Title"] for r in snapshot["standard_roles"]]
+        return snapshot["records"]
+    ROLES[:] = LEGACY_ROLES
+    return legacy_records()
+
+
+def legacy_records():
     path = Path(__file__).resolve().parents[1] / "data/sample/historical.json"
     return [EvidenceRow.model_validate(r).model_dump() for r in json.loads(path.read_text())]
 
@@ -93,6 +109,10 @@ def stats(values: list[float], sample_count: int | None = None) -> dict:
 
 
 def comparable(rows, role, status="awarded", scope=None):
+    from services.reference_data import eligible, prepared
+
+    if prepared(rows):
+        return eligible(rows, role, "rate", scope) if role and role.strip() else []
     if status not in ("submitted", "awarded", "both"):
         raise ValueError("Unknown submitted/awarded filter")
     return [
@@ -108,7 +128,11 @@ def comparable(rows, role, status="awarded", scope=None):
     ]
 
 
-def rate_benchmark(rows, role, year=None, status="awarded", scope=None):
+def rate_benchmark(rows, role, year=None, status="awarded", scope=None, quantity_unit=None):
+    from services.reference_data import prepared, rate_reference
+
+    if prepared(rows):
+        return rate_reference(rows, role, year, status, scope, quantity_unit=quantity_unit)
     cohort = comparable(rows, role, status, scope)
     if year is not None:
         cohort = [r for r in cohort if r["pricing_year"] == year]
@@ -159,6 +183,10 @@ def position(value, benchmark):
 
 
 def quantity_benchmark(rows, role, year=None, status="awarded", scope=None):
+    from services.reference_data import prepared, quantity_reference
+
+    if prepared(rows):
+        return quantity_reference(rows, role, year, status, scope)
     reference = rate_benchmark(rows, role, year, status, scope)
     fields = [
         "record_id",
@@ -184,6 +212,11 @@ def quantity_benchmark(rows, role, year=None, status="awarded", scope=None):
 
 
 def escalation_benchmark(rows, role, status="awarded", scope=None):
+    from services.reference_data import annual_reference, prepared
+
+    if prepared(rows):
+        # A role-specific lookup must not silently become the general cohort.
+        return annual_reference(rows, role or "", status, scope)
     groups = {}
     for r in comparable(rows, role, status, scope):
         groups.setdefault(r["schedule_id"], []).append(r)
@@ -254,6 +287,15 @@ def escalation_benchmark(rows, role, status="awarded", scope=None):
 
 
 def quoted_schedule(rows, schedule_id, role, calendar_years):
+    from services.reference_data import prepared
+
+    if prepared(rows):
+        # Calendar dates in the prepared workbook are synthetic. Retained legacy
+        # quotes remain available only by their explicit historical schedule ID.
+        prior = [r for r in legacy_records() if r["schedule_id"] == schedule_id]
+        if prior:
+            return quoted_schedule(prior, schedule_id, role, calendar_years)
+        rows = [r for r in rows if r.get("data_origin") == "private officer proposal"]
     cohort = comparable(rows, role, "both")
     cohort = [r for r in cohort if r["schedule_id"] == schedule_id]
     # A private, officer-confirmed proposal quote may price its own review only.

@@ -7,20 +7,20 @@ from services.workflow import confirm, findings, missing_for_gate, requires_deci
 
 GATE_STEPS = {
     "profile": 0,
-    "responsibilities": 2,
+    "responsibilities": 1,
     "quantities": 1,
-    "plan": 2,
+    "plan": 1,
     "rates": 3,
     "base": 3,
     "escalation": 4,
 }
 STEP_NAMES = {
-    0: "Contract context",
-    1: "Deployment inputs",
-    2: "Deployment review",
+    0: "Project",
+    1: "Deployment",
+    2: "Deployment",
     3: "Starting rates",
-    4: "Future cost changes",
-    5: "Your manpower budget",
+    4: "Annual changes",
+    5: "Budget",
 }
 BASIS_STEPS = {"quantity": 1, "rate": 3, "escalation": 4, "policy": 4}
 
@@ -43,6 +43,8 @@ def finding_step(finding):
 
 def error_step(message):
     text = message.casefold()
+    if "shared operational reason" in text:
+        return 1
     if "edited finding" in text:
         return 5
     if any(
@@ -260,6 +262,68 @@ def review_state(plan, records, pending_errors=()):
     }
 
 
+def headcount_comparison(plan, result):
+    """Attribute quantity first at starting rates, then price changes on proposed staffing."""
+    if plan.contract_kind != "existing contract" or plan.current_deployment_status != "known":
+        return {"available": False, "reason": "Current headcount is needed for a Year 0 comparison."}
+    missing, baseline = [], D(0)
+    for role in plan.roles:
+        if role.current_quantity is None:
+            missing.append(role.label + ": current headcount")
+        elif role.quantity_unit != "headcount" and (role.included or role.current_quantity):
+            missing.append(role.label + ": comparable headcount unit")
+        elif D(role.current_quantity) != D(role.current_quantity).to_integral_value():
+            missing.append(role.label + ": whole current headcount")
+        elif role.current_quantity:
+            if role.rate is None or role.rate <= 0:
+                missing.append(role.label + ": starting monthly rate")
+            else:
+                baseline += D(cents(D(role.current_quantity) * D(role.rate) * 12))
+    if missing:
+        return {"available": False, "reason": "Year 0 comparison needs " + "; ".join(missing) + "."}
+    annual, _ = annual_breakdown(plan, result)
+    rows = []
+    for row in annual:
+        item = {
+            "Contract year": row["Contract year"],
+            "Current headcount at starting rates": cents(baseline),
+            "Headcount change": cents(D(row["Starting-rate manpower cost"]) - baseline),
+            "General annual increase": row["Compounded annual manpower increase"],
+            "PWM increase": row["PWM increase"],
+            "Other adjustments": row["Other adjustments"],
+            "Annual total": row["Total annual manpower cost"],
+        }
+        if (
+            cents(sum((D(v) for k, v in item.items() if k not in ("Contract year", "Annual total")), D(0)))
+            != item["Annual total"]
+        ):
+            raise ArithmeticError("Headcount and price attribution does not reconcile")
+        rows.append(item)
+    years = D(len(rows))
+    average = D(result["contract_total"]) / years
+    increase = average - baseline
+    impacts = []
+    for field in ("Headcount change", "General annual increase", "PWM increase", "Other adjustments"):
+        cost = sum((D(r[field]) for r in rows), D(0)) / years
+        if cost or field != "Other adjustments":
+            impacts.append(
+                {
+                    "Cost driver": field,
+                    "Average change per year (SGD)": cents(cost),
+                    "Share of increase (%)": float(cost / increase * 100) if increase > 0 else None,
+                }
+            )
+    return {
+        "available": True,
+        "baseline": cents(baseline),
+        "average": cents(average),
+        "increase": cents(increase),
+        "increase_percent": float(increase / baseline * 100) if baseline else None,
+        "rows": rows,
+        "impacts": impacts,
+    }
+
+
 def annual_breakdown(plan, result):
     from review_inputs import cost_components
 
@@ -454,21 +518,34 @@ def source_summary(plan, records):
     from services.evidence import rate_benchmark
 
     rows, sources, active = [], [], []
+    record_ids = {r["record_id"] for r in records}
     for role in plan.roles:
         if not role.included:
             continue
         bm = rate_benchmark(
-            records, role.mapped_role, role.benchmark_year, role.benchmark_status, role.benchmark_scope
+            records,
+            role.mapped_role,
+            role.benchmark_year,
+            role.benchmark_status,
+            role.benchmark_scope,
+            quantity_unit=role.quantity_unit,
         )
-        active.extend(bm["records"])
         basis = retained_basis(plan, role, "rate")
+        recorded = basis.snapshots.get(role.id, {}).get("reference_records") if basis else None
+        reference_rows = recorded if recorded is not None else bm["records"]
+        if recorded:
+            prepared_basis = recorded[0].get("reference_kind") == "prepared quotation"
+            key = "submission_id" if prepared_basis else "schedule_id"
+            count = len({r.get(key) for r in recorded})
+            support = f"{count} recorded {'submissions' if prepared_basis else 'schedules'}"
+        else:
+            support = f"{bm['sample_count']} active comparable references"
+        active.extend(reference_rows)
         reason = basis.explanation if basis else role.rate_reason
         reference = basis.source if basis else ""
-        if reference and not all(
-            x.strip() in {r["record_id"] for r in records} for x in reference.split(",")
-        ):
+        if reference and not all(x.strip() in record_ids for x in reference.split(",")):
             sources.append(reference)
-        sources.extend(r["source"] for r in bm["records"] if r.get("source"))
+        sources.extend(r["source"] for r in reference_rows if r.get("source"))
         rows.append(
             {
                 "Role": role.label,
@@ -479,25 +556,32 @@ def source_summary(plan, records):
                     if role.rate_origin == "Synthetic benchmark selection"
                     else "Officer allowance; pricing explanation not recorded"
                 ),
-                "Reference year": str(role.benchmark_year or "Not recorded"),
-                "Sample support": f"{bm['sample_count']} comparable schedules"
-                if bm["sample_count"]
-                else "No comparable rate reference",
+                "Reference year": "Source contract-year quote; actual calendar year unknown"
+                if (recorded and recorded[0].get("reference_kind") == "prepared quotation")
+                or (bm.get("reference_kind") == "prepared quotation" and not basis)
+                else str(role.benchmark_year or "Not recorded"),
+                "Sample support": support,
             }
         )
     # Annual-increase selections may use a general cohort even when no role has a rate match.
     for basis in plan.decision_bases:
         if basis.kind == "escalation":
-            if basis.source and not all(
-                x.strip() in {r["record_id"] for r in records} for x in basis.source.split(",")
-            ):
+            if basis.source and not all(x.strip() in record_ids for x in basis.source.split(",")):
                 sources.append(basis.source)
             for snapshot in basis.snapshots.values():
+                from services.reference_data import recorded_reference_rows
+
+                bundle = snapshot.get("reference_data", {})
                 ids = snapshot.get("reference_data", {}).get(
                     "record_ids", snapshot.get("reference_record_ids", snapshot.get("record_ids", []))
                 )
-                active.extend(r for r in records if r["record_id"] in ids)
-                sources.extend(r["source"] for r in records if r["record_id"] in ids and r.get("source"))
+                selected = (
+                    recorded_reference_rows(bundle)
+                    if bundle
+                    else [r for r in records if r["record_id"] in ids]
+                )
+                active.extend(selected)
+                sources.extend(r["source"] for r in selected if r.get("source"))
     demo = any("synthetic" in r.get("data_origin", "").casefold() for r in active)
     return rows, list(dict.fromkeys(x for x in sources if x)), demo
 

@@ -212,17 +212,11 @@ def test_officer_can_keep_valid_rate_using_the_existing_rationale(monkeypatch, t
     at = blank(monkeypatch, tmp_path)
     at.session_state["plan"] = p
     at.run()
-    flag = next(f for f in findings(p, load_records()) if f.code == "rate_range")
-    prefix = f"finding_{p.id}_{flag.id}_{flag.fingerprint}"
-    assert at.text_area(key=prefix + "_reason").value == payload["rate_reason"]
-    at.radio(key=prefix + "_choice").set_value("Keep my figures").run()
-    at.button(key=prefix + "_record").click().run()
     assert not at.exception
-    result = at.session_state["plan"]
-    assert result.roles[0].rate == 1000
-    assert reviewed(next(f for f in findings(result, load_records()) if f.id == flag.id))
-    assert any(x.value == "Budget status: Ready for confirmation" for x in at.info)
-    assert "rates" in result.confirmations and "escalation" in result.confirmations
+    flag = next(f for f in findings(p, load_records()) if f.code == "rate_range")
+    assert not any((x.key or "").startswith(f"finding_{p.id}_{flag.id}") for x in at.text_area)
+    assert at.session_state["plan"].roles[0].rate_reason == payload["rate_reason"]
+    assert not at.button(key="confirm_final_budget").disabled
 
 
 def test_different_profiles_remain_visible_for_repeated_role_titles(monkeypatch, tmp_path):

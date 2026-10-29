@@ -1,31 +1,67 @@
-# Deployment preparation — no deployment performed
+# Setup and deployment
 
-The hosting provider remains undecided. The app can be packaged as a container or reviewed for Streamlit hosting. Local review and a running localhost link are not shared deployment.
+The complete application starts with `app.py`; both agents are included. Publishing a Git branch does not create a hosted deployment. No provider is selected or deployed as part of consolidation.
 
-## Required shared-hosting configuration
+## Fresh local checkout
 
-1. Provision a durable PostgreSQL database using a hosting account chosen by the officer. Use TLS and a database user restricted to the app's tables. Back up the database; original uploads are stored in versioned project JSON, not an ephemeral upload directory. Snapshots have no automatic deletion policy in this release.
-2. Configure an OIDC provider and callback URL privately. Use a provider that supplies a stable `sub`, issuer and email. Restrict allowed emails explicitly. This release offers per-officer project ownership, not team edit sharing.
-3. In the host's server-side secrets, set `DEPLOYMENT_MODE="shared"`, `DATABASE_URL="postgresql+psycopg://...?...sslmode=require"`, `ALLOWED_EMAILS`, `OPENAI_API_KEY` and `OPENAI_MODEL`.
-4. Put the Streamlit `[auth]` configuration into server-side `secrets.toml`/Secrets settings: callback URL, random cookie secret, client ID, client secret, OIDC metadata URL and `expose_tokens=false`. See the official [Streamlit authentication guide](https://docs.streamlit.io/develop/concepts/connections/authentication).
-5. Verify login, denied access, stable project ownership after logout/restart, parallel-tab conflict handling, durable restores, backups, live model access and spend limits on the selected host before inviting testers. The code checks local SQLite owner isolation; a real PostgreSQL/identity-provider combination has not been exercised.
-6. Separately authorise publication. Review the intended file list for secrets, real data, student IDs, previous prototype or Pulse content. Do not publish `BUILD_BRIEF.md` unchanged: it includes private local source paths and an author email from the handoff. `.env`, secrets, local databases, uploads, outputs and environments are ignored. `.dockerignore` also excludes the brief from the runtime image.
+Check out the consolidation PR branch, or use `main` after review/merge. Python 3.14 is the tested development version; the project declares `>=3.11,<3.15`.
 
-Do not assume an ephemeral SQLite file survives cloud restarts. Do not expose `DEPLOYMENT_MODE=local` on a public host. Project sharing between authenticated officers would need an explicit access model and tests in a future iteration.
+```powershell
+uv sync --frozen --python 3.14
+Copy-Item .env.example .env
+uv run streamlit run app.py --server.address 127.0.0.1 --server.port 8511 --browser.gatherUsageStats false
+```
+
+Copy the blank configuration only on a fresh installation. Preserve existing private settings. Without `uv`:
+
+```powershell
+python -m venv .venv
+.venv/Scripts/python.exe -m pip install --require-hashes -r requirements.txt
+.venv/Scripts/python.exe -m streamlit run app.py --server.address 127.0.0.1 --server.port 8511 --browser.gatherUsageStats false
+```
+
+The requirements are exported from the lockfile. Tests/lint need `uv sync` with its dev dependency group, rather than runtime-only requirements. On another OS use its virtual-environment executable path. Run from the repository root for consistent configuration/storage paths.
+
+No key is needed for ordinary examples, calculations or exports. Optional AI requires private `OPENAI_API_KEY` and `OPENAI_MODEL`. Actual `.env`/`.streamlit/secrets.toml` files are ignored. Never put secrets in commands, build arguments, source or sample workbooks. Shared hosts should use server-side secrets.
+
+## Data required on another machine
+
+Git includes synthetic JSON fixtures, reviewed title context, the dated PWM catalogue and authored proposal workbooks. The ordinary proposal and Site Xtown example work without the owner's database. Invented records and illustrative allowances must retain their labels.
+
+Private prepared references are not needed to launch both agents. Without a private activation pointer, the app uses the synthetic fallback. Set `MANPOWER_REFERENCE_SOURCE=synthetic` for an explicit demonstration installation. An authorised private installation can set `MANPOWER_REFERENCE_DIR` and separately provision its approved snapshot and activation pointer. Do not copy raw source workbooks into Git or silently switch versions. See [reference provisioning](docs/PREPARED_REFERENCES.md).
+
+The owner's current v3 source, saved inputs and project revisions are private. Consolidation does not clean/import/regenerate/activate sources. Restored projects need their original reference snapshots to resolve full evidence; missing snapshots must not be replaced with the host's current source.
+
+## Persistence and access
+
+Local mode uses `DATABASE_URL=sqlite:///local_data/plans.db` by default and creates its directory. Back up the database consistently with approved reference snapshots. Budget/proposal revisions preserve original document bytes inside project JSON, so storage needs appropriate access, backups and retention decisions.
+
+Agent 2 tender reviews use JSON download/resume and are not automatically saved in Agent 1's owned revision database. Download before ending the session. Browser drafts are not durable backups.
+
+Shared mode requires:
+
+1. Durable PostgreSQL with TLS, a restricted app account and backups.
+2. Private `DEPLOYMENT_MODE=shared`, a `DATABASE_URL` beginning `postgresql+psycopg://`, and an explicit comma-separated `ALLOWED_EMAILS`.
+3. Server-side Streamlit `[auth]` settings: callback URL, random cookie secret, client ID/secret, OIDC metadata URL and `expose_tokens=false`. The provider must supply stable issuer/subject and accepted email identity. Consult [Streamlit authentication](https://docs.streamlit.io/develop/concepts/connections/authentication) for the selected host.
+4. Optional private model credentials with spend controls if live guidance will be enabled.
+
+Do not expose local mode publicly. Code checks per-officer ownership and optimistic revision conflicts. Team editing is not implemented. Real PostgreSQL/OIDC hosting remains unverified. Test allowed/denied login, ownership after restart/logout, concurrent revisions, restores, durable uploads/references and backup recovery before inviting users. There is no automated upload-retention policy.
 
 ## Container packaging
 
-The supplied Dockerfile runs the app and provides a health check. It has not been built or published here. For a later local container check (not cloud deployment):
+The Dockerfile installs runtime requirements, runs as an unprivileged user and exposes Streamlit on 8501 with a health check. Build from a reviewed checkout. The Docker ignore rules exclude private/generated files.
 
 ```powershell
 docker build -t fm-manpower-review .
-docker run --rm -p 127.0.0.1:8511:8501 --env-file .env -v fm-review-data:/app/local_data fm-manpower-review
+docker run --rm -p 127.0.0.1:8512:8501 --env-file .env -v fm-review-data:/app/local_data fm-manpower-review
 ```
 
-The named volume makes local container storage durable. Shared mode should instead use the remote PostgreSQL store and an OIDC secrets mount, with HTTPS handled by the chosen host. Do not provide secrets as Docker build arguments.
+Port 8512 avoids an existing development app on 8511. The named volume preserves local-mode SQLite/reference files. Shared mode uses PostgreSQL and private OIDC secrets, with HTTPS supplied by the host. No Docker build or hosted deployment is claimed unless separately recorded.
 
-Streamlit hosting uses `app.py` and `requirements.txt`, with privately configured Secrets settings. Verify its supported Python version and compatible dependency resolution when a host is chosen. Development verification here uses Python 3.14; other supported Python versions have not been tested.
+Managed Streamlit hosting must use `app.py` and `requirements.txt` from the same reviewed revision, compatible Python, private server secrets and durable storage. Verify host-specific Python and authentication support when choosing a provider.
 
-## Publication status
+## Acceptance
 
-The collaboration preparation creates local Git metadata and a reviewed local baseline/feature branch where checks permit. No push, hosted database, identity-provider registration or cloud deployment has been performed. Original private notes are excluded from tracking; shareable handover and publication steps are in `docs/HANDOVER.md` and `docs/COLLABORATION.md`. The previous prototype's Git staging and files remain untouched.
+Run offline regression from a checkout containing only publishable files. Exercise both activities, the new-budget example, proposal upload/sample, confirmation invalidation, save/resume, calculations, exports and tender review. Keep model calls disabled. Audit the exact staged publication set with `python -m scripts.audit_shareable`.
+
+Results and limits are recorded in [VALIDATION.md](docs/VALIDATION.md). Hosted persistence/authentication, provider connectivity, native Excel recalculation and comprehensive navigation performance remain separate checks. Only Deployment has an isolated before/after timing result.

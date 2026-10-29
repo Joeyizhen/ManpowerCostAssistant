@@ -1,13 +1,11 @@
-"""Track 1 screens and navigation around the existing shared workflow gates."""
+"""Five routed officer screens around the existing financial confirmation gates."""
 
 import pandas as pd
 import streamlit as st
 
 import ui_drafts
-from activity_nav import retained_key
 from journey_inputs import (
     commit_rows,
-    deployment_review_table,
     manpower_screen,
     pending_control_errors,
     project_prefix,
@@ -15,15 +13,15 @@ from journey_inputs import (
     validate_manpower,
     validate_project,
 )
+from services.deployment_review import accept_suggestions, officer_draft
 from services.evidence import load_records
-from services.hybrid import STEP_LABELS, comparison_rows
-from services.journey import accept_review, prepare_review, working_draft
+from services.hybrid import STEP_LABELS, STEP_ROUTES, canonical_step, step_number
+from services.journey import accept_review, prepare_review
 from services.manpower_checks import LOCAL_ACTOR, quantity_discrepancy, shared_basis_mismatches
 from services.workflow import confirm
 
 
 def confirmation_errors(plan, officer, records, gate=None, checkpoint=None):
-    """Exercise existing validation on a throwaway copy; never confirm the live plan."""
     scope = (
         "operational"
         if checkpoint in ("requirements", "manpower")
@@ -33,7 +31,20 @@ def confirmation_errors(plan, officer, records, gate=None, checkpoint=None):
         else "all"
     )
     errors = pending_control_errors(plan, scope=scope)
-    checking_officer = officer.strip() or LOCAL_ACTOR
+    if checkpoint == "manpower":
+        from services.workflow import missing_for_gate
+
+        # Readiness is a read-only input check, not a rehearsal of applying and
+        # confirming every proposal. Actual acceptance still validates all gates.
+        draft = officer_draft(plan)
+        errors += [
+            error
+            for gate in ("profile", "responsibilities", "quantities", "plan")
+            for error in missing_for_gate(draft, gate, records)
+        ]
+        if any(item["base_version"] != plan.version for item in plan.pending):
+            errors.append("Refresh or dismiss suggestions made before the latest revision.")
+        return list(dict.fromkeys(errors))
     candidate = plan.model_copy(deep=True)
     try:
         if checkpoint:
@@ -43,150 +54,51 @@ def confirmation_errors(plan, officer, records, gate=None, checkpoint=None):
                     return errors + result.get(
                         "missing_inputs", [result.get("action", "Review the remaining details.")]
                     )
-            accept_review(candidate, checking_officer, records)
+            accept_review(candidate, officer.strip() or LOCAL_ACTOR, records)
         else:
-            confirm(candidate, gate, checking_officer, records)
+            confirm(candidate, gate, officer.strip() or LOCAL_ACTOR, records)
     except ValueError as error:
-        return errors + str(error).splitlines()
+        errors += str(error).splitlines()
     return errors
 
 
 def show_missing(errors):
     if errors:
-        st.info("Before you can confirm:\n" + "\n".join(f"• {error}" for error in dict.fromkeys(errors)))
+        st.info("Before you can confirm:\n" + "\n".join(f"• {e}" for e in dict.fromkeys(errors)))
 
 
-def sanity_changed(key):
-    plan = st.session_state.plan
-    rows = comparison_rows(plan)
-    by_id = {row["id"]: row for row in rows}
-    for index, values in st.session_state.get(key, {}).get("edited_rows", {}).items():
-        original = st.session_state[key + "_base"][int(index)]
-        if "Remarks / correction" in values:
-            by_id[original["id"]]["Duties / deployment notes"] = values["Remarks / correction"]
-    commit_rows(plan, rows)
-    st.session_state.six_epoch = st.session_state.get("six_epoch", 0) + 1
+DEPLOYMENT_REVIEW_UI_VERSION = 3
 
 
 def review_summary(plan):
-    draft = working_draft(plan)
-    st.markdown("**What the assistant understands**" if plan.chat else "**Recorded understanding**")
-    st.write(draft.profile.description or "Property description not provided.")
-    st.caption(
-        f"{draft.profile.base_years or '?'} base + {draft.profile.option_years if draft.profile.option_years is not None else '?'} option years"
-    )
-    duplicates = {}
-    for role in draft.roles:
-        if role.included:
-            duplicates.setdefault(role.label.strip().casefold(), []).append(role)
-    for group in duplicates.values():
-        if len(group) > 1:
-            st.warning(
-                f"Repeated title: {group[0].label}. Check these are separate deployments: "
-                + ", ".join(r.id for r in group)
-                + ". Both rows are retained and costed separately."
-            )
-    st.markdown("**Sanity checks**")
+    draft = officer_draft(plan)
     flagged = []
     for role in draft.roles:
         check = quantity_discrepancy(role, plan.contract_kind == "existing contract")
         if check:
             flagged.append(
                 {
-                    "id": role.id,
                     "Role": role.label,
                     "Current": role.current_quantity,
                     "Proposed": role.quantity,
                     "Check": check,
-                    "Remarks / correction": role.duties_notes,
+                    "Recorded reason": role.duties_notes,
                 }
             )
-    # Preserve unfinished optional notes from the previous review layout without keeping obsolete gates.
-    for prefix in list(st.session_state.get("finding_inputs", {})):
-        if prefix.startswith(f"finding_{plan.id}_advice_"):
-            baseline = st.session_state.finding_inputs.pop(prefix)
-            text = st.session_state.get(prefix + "_reason", "")
-            if text and text != baseline.get("_reason"):
-                notes = plan.working_notes.setdefault("notes", [])
-                retained = "Earlier optional review note: " + text
-                if retained not in notes:
-                    notes.append(retained)
-                plan.working_notes.setdefault("base_version", plan.version)
+    flagged.extend(shared_basis_mismatches(draft))
     if flagged:
         st.caption(
-            "Only material numerical mismatches are listed. Edit the deployment table below or retain a valid choice with a recorded explanation at final review."
-        )
-        key = f"sanity_{plan.id}_{st.session_state.get('six_epoch', 0)}"
-        st.session_state[key + "_base"] = flagged
-        frame = pd.DataFrame(flagged)
-        st.dataframe(
-            frame.style.format({"Current": "{:.2f}", "Proposed": "{:.2f}"}, na_rep="").map(
-                lambda value: "color: #b42318; font-weight: bold", subset=["Check"]
-            ),
-            hide_index=True,
-            width="stretch",
-            placeholder="",
-            column_config={
-                "id": None,
-                "Current": None
-                if plan.contract_kind != "existing contract"
-                else st.column_config.NumberColumn("Current", format="%.2f"),
-                "Proposed": st.column_config.NumberColumn("Proposed", format="%.2f"),
-                "Remarks / correction": st.column_config.TextColumn(width="large"),
-                "Check": st.column_config.TextColumn("Remarks to check", width="medium"),
-            },
-        )
-    else:
-        st.caption(
-            "No explicit numerical discrepancy found. Unchanged roles are status quo; no role-by-role justification is needed."
-        )
-    shared_checks = shared_basis_mismatches(draft)
-    if shared_checks:
-        st.caption(
-            "Check the shared staffing basis against the selected totals. Revise it in Step 2 or retain the valid figures with a qualification at final review."
+            "Check these material discrepancies; correct the figures or the recorded reason in the table."
         )
         st.dataframe(
-            pd.DataFrame(shared_checks)
-            .drop(columns=["id"])
-            .style.map(lambda value: "color: #b42318; font-weight: bold", subset=["Check"]),
+            pd.DataFrame(flagged).style.map(lambda _: "color:#b42318", subset=["Check"]),
             hide_index=True,
             width="stretch",
+            column_config={"id": None},
         )
-    original = {r["id"]: r for r in plan.officer_manpower_input}
-    changes = []
-    for role in draft.roles:
-        before = original.get(role.id)
-        if before and any(
-            before.get(k) != getattr(role, k)
-            for k in ("label", "quantity", "quantity_unit", "included", "duties_notes")
-        ):
-            changes.append(
-                {
-                    "Original role": before["label"],
-                    "Suggested role": role.label,
-                    "Your quantity": before["quantity"],
-                    "Suggested quantity": role.quantity,
-                    "Your basis": before["quantity_unit"],
-                    "Suggested basis": role.quantity_unit,
-                    "Original remarks": before.get("duties_notes", ""),
-                    "Suggested remarks": role.duties_notes,
-                    "Reason": role.quantity_reason,
-                }
-            )
-    if changes:
-        st.markdown("**Suggested changes**")
-        st.dataframe(changes, hide_index=True, width="stretch", placeholder="")
-    with st.expander("Remaining assumptions and unknowns"):
-        for name in ("operating_hours", "assets", "locations", "response_requirements"):
-            value = getattr(draft.profile, name)
-            st.write(f"{name.replace('_', ' ').capitalize()}: {value or 'Not provided; no value inferred'}")
-        for role in draft.roles:
-            if role.included:
-                st.write(f"{role.label}: {role.quantity_reason or 'Quantity basis needs review'}")
 
 
 def completed_steps(plan):
-    """Input completion is distinct from officer confirmation; recheck after revisions."""
     complete = []
     for step, validate in [(0, validate_project), (1, validate_manpower)]:
         try:
@@ -194,9 +106,8 @@ def completed_steps(plan):
             complete.append(step)
         except ValueError:
             break
-    gates = [(2, ("plan",)), (3, ("rates", "base")), (4, ("escalation",)), (5, ("final",))]
-    for step, required in gates:
-        if all(g in plan.confirmations for g in required):
+    for step, gates in [(2, ("plan",)), (3, ("rates", "base")), (4, ("escalation",)), (5, ("final",))]:
+        if all(g in plan.confirmations for g in gates):
             complete.append(step)
     return complete
 
@@ -204,122 +115,161 @@ def completed_steps(plan):
 def maximum_step(plan):
     complete = completed_steps(plan)
     confirmed = max((i + 1 for i in complete if 2 <= i < 5), default=0)
-    inputs = 2 if 1 in complete else 1 if 0 in complete else 0
-    return max(inputs, confirmed)
+    return canonical_step(max(2 if 1 in complete else 1 if 0 in complete else 0, confirmed))
 
 
 def step_for_stage(stage):
-    return 2 if stage <= 3 else 3 if stage <= 5 else 4 if stage == 6 else 5
+    return 1 if stage <= 3 else 3 if stage <= 5 else 4 if stage == 6 else 5
+
+
+def visit_step(plan, step):
+    ui_drafts.capture(plan, pending_control_errors(plan))
+    plan.ui_step = canonical_step(step)
 
 
 def show_progress(plan):
-    plan.input_steps_completed = completed_steps(plan)
-    limit = maximum_step(plan)
+    # Preserve legacy wire locations, including the old review alias, without
+    # changing any saved financial inputs, signatures or confirmation records.
     if plan.ui_step is None:
-        plan.ui_step = limit
-    plan.ui_step = min(plan.ui_step, limit)
-    st.progress(len(plan.input_steps_completed) / 6)
-    with st.expander("Your six steps"):
-        for index, label in enumerate(STEP_LABELS):
-            status = (
-                "Complete"
-                if index in plan.input_steps_completed
-                else "Current"
-                if index == plan.ui_step
-                else "Next"
+        plan.ui_step = maximum_step(plan)
+    plan.ui_step = canonical_step(plan.ui_step)
+    complete = completed_steps(plan)
+    status = {
+        0: 0 in complete,
+        1: "plan" in plan.confirmations,
+        3: "base" in plan.confirmations,
+        4: "escalation" in plan.confirmations,
+        5: "final" in plan.confirmations,
+    }
+    st.markdown(
+        "<style>.st-key-five_step_navigation {position:sticky;top:2.5rem;z-index:20;"
+        "background:var(--background-color,#f8fafc);padding:.35rem 0;}"
+        ".st-key-five_step_navigation button p {font-size:.85rem;white-space:nowrap;}</style>",
+        unsafe_allow_html=True,
+    )
+    with st.container(key="five_step_navigation"):
+        for column, step in zip(st.columns(5), STEP_ROUTES, strict=True):
+            column.button(
+                f"{'✓ ' if status[step] else ''}{step_number(step)}. {STEP_LABELS[step]}",
+                key=f"step_nav_{step}",
+                type="primary" if step == plan.ui_step else "secondary",
+                width="stretch",
+                on_click=visit_step,
+                args=(plan, step),
+                help="Completed" if status[step] else "Needs input or confirmation",
             )
-            st.write(f"{index + 1}. {label} · {status}")
-    with st.sidebar:
-        selected = st.selectbox(
-            "Go to step",
-            list(range(limit + 1)),
-            index=plan.ui_step,
-            format_func=lambda i: f"{i + 1}. {STEP_LABELS[i]}",
-            key=retained_key(f"six_nav_{plan.id}_{plan.ui_step}_{limit}"),
-        )
-        if selected != plan.ui_step:
-            if ui_drafts.unsaved(plan, pending_control_errors(plan)):
-                st.warning("Apply or revert your pending selection before leaving this step.")
-            else:
-                plan.ui_step = selected
-                st.rerun()
-    st.subheader(f"Step {plan.ui_step + 1} out of 6: {STEP_LABELS[plan.ui_step]}")
+    st.subheader(f"Step {step_number(plan.ui_step)} out of 5: {STEP_LABELS[plan.ui_step]}")
 
 
 def navigation(plan):
-    step = plan.ui_step
-    pending = pending_control_errors(
-        plan, scope="operational" if step <= 2 else "rates" if step == 3 else "all"
-    )
-    errors = list(pending)
-    if step in (0, 1):
-        try:
-            (validate_project if step == 0 else validate_manpower)(plan)
-        except ValueError as error:
-            errors.extend(str(error).split("; "))
-        if step == 0 and st.session_state.get(project_prefix(plan) + "_error"):
-            errors.insert(0, st.session_state[project_prefix(plan) + "_error"])
-        if errors:
-            st.info("To continue:\n" + "\n".join(f"• {error}" for error in dict.fromkeys(errors)))
+    step = canonical_step(plan.ui_step)
+    index = STEP_ROUTES.index(step)
     back, onward = st.columns(2)
-    if back.button(
-        "Back", key="six_back", disabled=step == 0 or ui_drafts.unsaved(plan, pending), width="stretch"
-    ):
-        plan.ui_step -= 1
+    back.button(
+        "Back",
+        key="six_back",
+        disabled=index == 0,
+        width="stretch",
+        on_click=visit_step,
+        args=(plan, STEP_ROUTES[max(0, index - 1)]),
+    )
+    if step == 0:
+        errors = []
+        try:
+            validate_project(plan)
+        except ValueError as error:
+            errors += str(error).split("; ")
+        error = st.session_state.get(project_prefix(plan) + "_error") or plan.basis_drafts.get(
+            "project_text", {}
+        ).get("error")
+        if error:
+            errors.insert(0, error)
+        if st.session_state.get(f"project_attempt_{plan.id}") and errors:
+            st.info("To continue:\n" + "\n".join(f"• {e}" for e in dict.fromkeys(errors)))
+        if onward.button("Continue", key="six_continue", width="stretch"):
+            st.session_state[f"project_attempt_{plan.id}"] = True
+            if not errors:
+                visit_step(plan, 1)
+            st.rerun()
+
+
+def assistant_changes(plan):
+    if not plan.pending:
+        return
+    changes = []
+    base = officer_draft(plan)
+    originals = {r.id: r for r in base.roles}
+    for item in plan.pending:
+        data = item["payload"]
+        if item["kind"] == "role":
+            old = originals.get(data.get("id"))
+            changes.append(
+                {
+                    "Role": data.get("label", "Role"),
+                    "Current": f"{old.quantity} {old.quantity_unit}" if old else "Not included",
+                    "Suggested": f"{data.get('quantity')} {data.get('quantity_unit', 'unit not confirmed')}",
+                    "Current role / remarks": old.label + ": " + old.duties_notes if old else "",
+                    "Suggested remarks": data.get("duties_notes", ""),
+                    "Reason": item["reason"],
+                }
+            )
+        elif item["kind"] == "profile":
+            before = base.profile.model_dump(mode="json")
+            for field, value in data.items():
+                if before.get(field) != value:
+                    changes.append(
+                        {
+                            "Item": field.replace("_", " ").capitalize(),
+                            "Current": str(before.get(field) or "Not recorded"),
+                            "Suggested": str(value or "Not recorded"),
+                            "Reason": item["reason"],
+                        }
+                    )
+        elif item["kind"] == "responsibility":
+            changes.append(
+                {
+                    "Item": "Duty",
+                    "Current": "Recorded deployment",
+                    "Suggested": data.get("description", ""),
+                    "Reason": item["reason"],
+                }
+            )
+    st.markdown("**Assistant suggestions — not yet applied**")
+    st.dataframe(changes, hide_index=True, width="stretch")
+    accept, dismiss = st.columns(2)
+    if accept.button("Accept suggested changes", key="accept_deployment_suggestions"):
+        try:
+            accept_suggestions(plan, st.session_state.officer)
+            st.session_state.six_epoch = st.session_state.get("six_epoch", 0) + 1
+            st.rerun()
+        except ValueError as error:
+            st.info(str(error))
+    if dismiss.button("Dismiss suggestions", key="dismiss_deployment_suggestions"):
+        plan.pending = []
+        plan.review_checkpoint = ""
         st.rerun()
-    if (
-        step < 5
-        and step not in (2, 3, 4)
-        and onward.button(
-            "Continue",
-            key="six_continue",
-            width="stretch",
-            disabled=bool(errors) or maximum_step(plan) <= step,
-        )
-    ):
-        plan.ui_step += 1
-        st.rerun()
-    if step == 3 and maximum_step(plan) <= step:
-        st.caption("Review and explicitly confirm this decision to continue.")
 
 
 def render_inputs(plan, cfg, request_guidance, stage, save_project):
     if plan.ui_step == 0:
         project_screen(plan)
-    elif plan.ui_step == 1:
-        rows = manpower_screen(plan)
-        from decision_inputs import basis_panel
-
-        basis_panel(plan, "quantity", load_records())
-        try:
-            key = st.session_state.get("six_editor_key", "")
-            if st.session_state.get(key, {}).get("edited_rows"):
-                commit_rows(plan, rows)
-        except ValueError as error:
-            st.error(str(error))
-            st.stop()
-    else:
-        rows = comparison_rows(plan)
-        review_summary(plan)
-        st.markdown("**Exact manpower plan awaiting your review**")
-        rows = deployment_review_table(plan)
-
-    if st.button("Save input draft"):
-        if save_project():
-            st.rerun()
-    if plan.ui_step != 2:
         return
-    st.markdown("**What would you like to do next?**")
+    rows = manpower_screen(plan)
+    key = st.session_state.get("six_editor_key", "")
+    if key and st.session_state.get(key, {}).get("edited_rows"):
+        commit_rows(plan, rows)
+    review_summary(plan)
+    assistant_changes(plan)
     errors = confirmation_errors(
-        plan, (st.session_state.get("officer", "") or LOCAL_ACTOR), load_records(), checkpoint="manpower"
+        plan, st.session_state.officer or LOCAL_ACTOR, load_records(), checkpoint="manpower"
     )
+    if plan.pending:
+        errors.append("Accept or dismiss the assistant suggestions before confirming your deployment.")
     show_missing(errors)
-    review_choice, continue_choice, revise_choice = st.columns(3)
-    review_choice.caption("Get assistant comments")
-    continue_choice.caption("Confirm staffing; choose rates")
-    revise_choice.caption("Ask about a revision")
-    if continue_choice.button(
-        "Use this plan",
+    already_confirmed = "plan" in plan.confirmations and not plan.pending and not plan.working_notes
+    primary, secondary = st.columns(2)
+    if primary.button(
+        "Continue to starting rates" if already_confirmed else "Confirm and continue",
         key="use_manpower_plan",
         type="primary",
         width="stretch",
@@ -328,44 +278,18 @@ def render_inputs(plan, cfg, request_guidance, stage, save_project):
         try:
             validate_project(plan)
             validate_manpower(plan)
-            result = prepare_review(plan, "manpower", load_records())
-            if not result["ready"]:
-                raise ValueError("; ".join(result.get("missing_inputs", [result["action"]])))
-            accept_review(plan, (st.session_state.get("officer", "") or LOCAL_ACTOR), load_records())
+            if already_confirmed:
+                plan.ui_step = 3
+                st.rerun()
+            prepared = prepare_review(plan, "manpower", load_records())
+            if not prepared["ready"]:
+                raise ValueError("; ".join(prepared.get("missing_inputs", [])))
+            accept_review(plan, st.session_state.officer or LOCAL_ACTOR, load_records())
             plan.ui_step = 3
             save_project()
             st.rerun()
         except ValueError as error:
-            st.error(str(error))
-    st.caption(
-        "Choose one option: request comments, use the displayed plan and select rates, or discuss changes."
-    )
-    if revise_choice.button("Discuss changes", key="revise_manpower_plan", width="stretch"):
+            st.info(str(error))
+    if secondary.button("Discuss deployment with AI", key="revise_manpower_plan", width="stretch"):
         st.session_state.manpower_help_open = True
         st.rerun()
-    st.caption("Edit figures with Back, or discuss a change in the assistant section below.")
-    if not (cfg.api_key and cfg.model):
-        st.info(
-            "Assistant comments need a configured API key and model. You can still confirm valid figures and continue to rates."
-        )
-    if review_choice.button("Review plan", width="stretch", disabled=not (cfg.api_key and cfg.model)):
-        try:
-            commit_rows(plan, rows)
-            validate_project(plan)
-            validate_manpower(plan)
-            plan.manpower_review_requested = True
-            save_project()
-            request_guidance(
-                "Review the brief, contract, current and proposed quantities, units, remarks and retained answers together. "
-                "Highlight contradictions between remarks and numerical changes. Zero is excluded; blank is unanswered. "
-                "Preserve combined roles and seniority. Do not create mandatory staffing requirements. "
-                "Give concise sanity checks and material follow-ups. Officers may keep valid figures with reasons or acknowledge uncertainty. "
-                "Describe discrepancies directly without self-justifying explanations. "
-                "No prices, escalation, qualification questionnaire or approval.",
-                stage,
-            )
-            save_project()
-            st.session_state.manpower_help_open = True
-            st.rerun()
-        except ValueError as error:
-            st.error(str(error))

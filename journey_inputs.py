@@ -7,7 +7,6 @@ import pandas as pd
 import streamlit as st
 
 from activity_nav import retained_key
-from services.evidence import map_role
 from services.hybrid import (
     cell_text,
     comparison_rows,
@@ -16,11 +15,10 @@ from services.hybrid import (
     validate_comparison,
 )
 from services.journey import working_draft
-from services.models import Role
-from services.role_reference import ROLE_FAMILIES, role_titles
 from services.workflow import missing_for_gate
 
 CONTEXTS = {"Existing contract": "existing contract", "New site / service": "new site / service"}
+HEADCOUNT_UI_VERSION = 2
 MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 BRIEF_LABEL = "Describe the properties and operating conditions the FM team will manage"
 
@@ -32,6 +30,12 @@ def project_prefix(plan):
 def pending_control_errors(plan, scope="all"):
     """Unapplied UI choices must not be mistaken for stored officer selections."""
     errors = []
+    if plan.basis_drafts.get("headcount_entry"):
+        errors.append("Apply or clear the saved headcount update in Deployment before confirming.")
+    if plan.basis_drafts.get("project_text"):
+        errors.append(
+            "Project: correct the unfinished project entry — " + plan.basis_drafts["project_text"]["error"]
+        )
     key = st.session_state.get("six_editor_key", "")
     draft = working_draft(plan)
     if plan.id in key:
@@ -164,23 +168,29 @@ def project_changed(field=None):
             start_month=month,
         )
         st.session_state.pop(prefix + "_error", None)
+        plan.basis_drafts.pop("project_text", None)
     except ValueError as error:
         st.session_state[prefix + "_error"] = str(error)
+        plan.basis_drafts["project_text"] = {
+            name: value("_" + name, "") for name in ("name", "brief", "start", "base", "option")
+        }
+        plan.basis_drafts["project_text"]["error"] = str(error)
 
 
 def project_screen(plan):
     p = working_draft(plan).profile
     prefix = project_prefix(plan)
+    raw = plan.basis_drafts.get("project_text", {})
     st.text_input(
-        "Proposed tender title",
-        p.name if p.name != "Untitled project" else "",
+        "Project name",
+        raw.get("name", p.name if p.name != "Untitled project" else ""),
         key=retained_key(prefix + "_name"),
         on_change=project_changed,
         placeholder="Appointment of FM Manpower for Site Corgi for 3 + 3 years",
     )
     st.text_area(
         BRIEF_LABEL,
-        p.description,
+        raw.get("brief", p.description),
         height=110,
         key=retained_key(prefix + "_brief"),
         on_change=project_changed,
@@ -189,8 +199,8 @@ def project_screen(plan):
     st.caption("Enter the anticipated start as MMM YYYY and the terms as numbers of years.")
     a, b, c = st.columns(3)
     a.text_input(
-        "Anticipated contract start date",
-        start_text(p),
+        "Anticipated start month",
+        raw.get("start", start_text(p)),
         placeholder="Jan 2028",
         key=retained_key(prefix + "_start"),
         on_change=project_changed,
@@ -199,7 +209,7 @@ def project_screen(plan):
     )
     b.text_input(
         "Base term (years)",
-        str(p.base_years) if p.base_years is not None else "",
+        raw.get("base", str(p.base_years) if p.base_years is not None else ""),
         placeholder="e.g. 3",
         key=retained_key(prefix + "_base"),
         on_change=project_changed,
@@ -207,7 +217,7 @@ def project_screen(plan):
     )
     c.text_input(
         "Option term (years)",
-        str(p.option_years) if p.option_years is not None else "",
+        raw.get("option", str(p.option_years) if p.option_years is not None else ""),
         placeholder="e.g. 3, or 0 if none",
         key=retained_key(prefix + "_option"),
         on_change=project_changed,
@@ -215,15 +225,6 @@ def project_screen(plan):
     )
     if p.base_years is not None and p.option_years is not None:
         st.caption(f"{p.base_years} base + {p.option_years} option = {p.years} years")
-    with st.expander("Exact start date, only if known"):
-        st.date_input(
-            "Exact contract start date",
-            value=p.start,
-            key=retained_key(prefix + "_exact"),
-            on_change=project_changed,
-            args=("exact",),
-            help="Needed only for date-specific policy adjustments or calendar-year price schedules. A planning month is not an exact date.",
-        )
 
 
 def validate_project(plan):
@@ -288,7 +289,10 @@ def editor_changed(key):
     for index, values in st.session_state.get(key, {}).get("edited_rows", {}).items():
         rows[int(index)].update(values)
     by_id = {row["id"]: row for row in rows}
-    rows = [{**row, **by_id.get(row["id"], {})} for row in comparison_rows(plan)]
+    rows = [
+        {**row, **by_id.get(row["id"], {})}
+        for row in comparison_rows(plan, common=False, include_pending=False)
+    ]
     try:
         commit_rows(
             plan,
@@ -316,7 +320,9 @@ def editor_changed(key):
 
 def support_changed(key):
     plan = st.session_state.plan
-    commit_rows(plan, comparison_rows(plan), support=st.session_state[key])
+    commit_rows(
+        plan, comparison_rows(plan, common=False, include_pending=False), support=st.session_state[key]
+    )
 
 
 def current_status_changed(key):
@@ -335,7 +341,7 @@ def current_status_changed(key):
 
 def staffing_basis_changed(prefix):
     plan = st.session_state.plan
-    rows = comparison_rows(plan)
+    rows = comparison_rows(plan, common=False, include_pending=False)
     shared = st.session_state.get(prefix + "_fte", [])
     for row in rows:
         row["Quantity basis"] = (
@@ -352,22 +358,139 @@ def staffing_basis_changed(prefix):
 
 
 def role_options(plan, scope):
-    # Presentation-only cleanup. Do not rewrite stored titles or invent equivalence mappings.
-    existing = {re.sub(r"\s+", " ", r["Role title"].strip()).casefold() for r in comparison_rows(plan)}
-    source = (
-        role_titles()
-        if scope == "Browse all roles"
-        else [t for family in ROLE_FAMILIES.values() for t in family]
+    from services.role_catalogue import available_roles
+
+    options = available_roles(plan)
+    return options["typical"] + options["additional"]
+
+
+def add_deployment_role(plan, title):
+    from services.role_catalogue import identity
+
+    values = comparison_rows(plan, common=False, include_pending=False)
+    if not title or identity(title) in {identity(r["Role title"]) for r in values}:
+        return
+    values.append(
+        {
+            "id": "role-" + uuid4().hex[:8],
+            "Role title": title.strip(),
+            "Proposed quantity / FTE": None,
+            "Current quantity / FTE": None,
+            "Quantity basis": "headcount",
+        }
     )
-    existing_mappings = {map_role(r["Role title"]) for r in comparison_rows(plan)} - {None}
-    seen, result = set(existing), []
-    for title in source:
-        title = re.sub(r"\s+", " ", title.strip())
-        key = title.casefold()
-        if key not in seen and not (map_role(title) and map_role(title) in existing_mappings):
-            seen.add(key)
-            result.append(title)
-    return sorted(result, key=str.casefold)
+    commit_rows(plan, values)
+    st.session_state.six_epoch = st.session_state.get("six_epoch", 0) + 1
+
+
+def add_role_control(plan, prefix):
+    from services.role_catalogue import available_roles
+
+    choices = available_roles(plan)
+    if choices["typical"]:
+        st.markdown("**Typical manpower**")
+        selected = st.pills(
+            "Typical manpower", choices["typical"], label_visibility="collapsed", key=prefix + "_typical"
+        )
+        if selected:
+            add_deployment_role(plan, selected)
+            st.rerun()
+    selected = st.selectbox(
+        "Add another role",
+        choices["additional"],
+        index=None,
+        placeholder="Search other database roles",
+        key=retained_key(prefix + "_add"),
+    )
+    if st.button("Add role", key="add_selected_roles", disabled=not selected):
+        add_deployment_role(plan, selected)
+        st.rerun()
+
+
+def keep_unlisted_role(key):
+    title = st.session_state.get(key, "")
+    if title:
+        st.session_state.plan.basis_drafts["role_entry"] = {"title": title}
+    else:
+        st.session_state.plan.basis_drafts.pop("role_entry", None)
+
+
+def keep_deployment_reason(prefix):
+    st.session_state.plan.basis_drafts["deployment_reason"] = {
+        "roles": st.session_state.get(prefix + "_reason_roles", []),
+        "reason": st.session_state.get(prefix + "_reason", ""),
+    }
+
+
+def shared_deployment_reason(plan, prefix):
+    from services.decision_basis import meaningful, record_basis, retained_basis
+
+    if st.session_state.pop(prefix + "_reason_reset", False):
+        st.session_state.pop(prefix + "_reason_roles", None)
+        st.session_state.pop(prefix + "_reason", None)
+    saved = plan.basis_drafts.get("deployment_reason", {})
+    draft = plan.model_copy(deep=True)
+    draft.pending = []
+    draft = working_draft(draft)
+    labels = {r.id: r.label for r in draft.roles if r.included and r.quantity is not None}
+    needs = [
+        r.id
+        for r in draft.roles
+        if r.id in labels
+        and not retained_basis(draft, r, "quantity")
+        and not meaningful(r.duties_notes)
+        and (
+            not meaningful(r.quantity_reason)
+            or r.quantity_reason.startswith("Officer-provided quantity in manpower table")
+        )
+        and (plan.contract_kind != "existing contract" or r.current_quantity != r.quantity)
+    ]
+    if not labels:
+        return
+    with st.expander("One operational reason covers related roles", expanded=bool(needs)):
+        selected = st.multiselect(
+            "Roles covered",
+            list(labels),
+            default=[rid for rid in saved.get("roles", needs) if rid in labels],
+            format_func=labels.get,
+            key=retained_key(prefix + "_reason_roles"),
+            on_change=keep_deployment_reason,
+            args=(prefix,),
+        )
+        reason = st.text_area(
+            "Shared operational reason",
+            value=saved.get("reason", ""),
+            key=retained_key(prefix + "_reason"),
+            on_change=keep_deployment_reason,
+            args=(prefix,),
+            placeholder="For example: two buildings require an on-site response team during opening hours.",
+        )
+        if st.button("Record shared reason", key=prefix + "_reason_record"):
+            try:
+                if plan.pending:
+                    raise ValueError(
+                        "Accept or dismiss assistant suggestions in Confirm deployment before recording this reason."
+                    )
+                record_basis(
+                    plan,
+                    "quantity",
+                    selected,
+                    "Operational rationale",
+                    reason,
+                    "Officer deployment decision",
+                    "officer assumption",
+                    st.session_state.officer,
+                )
+                plan.basis_drafts.pop("deployment_reason", None)
+                st.session_state[prefix + "_reason_reset"] = True
+                st.rerun()
+            except ValueError as error:
+                st.info(str(error))
+
+        if saved.get("reason") and st.button("Clear unrecorded reason", key=prefix + "_reason_clear"):
+            plan.basis_drafts.pop("deployment_reason", None)
+            st.session_state[prefix + "_reason_reset"] = True
+            st.rerun()
 
 
 def manpower_screen(plan):
@@ -389,30 +512,47 @@ def manpower_screen(plan):
         if existing
         else "Enter the staff numbers proposed for the new site or service."
     )
-    st.caption(
-        "These roles are optional. Blank proposed entries are unanswered; enter 0 for a role you do not need."
-    )
-    rows = comparison_rows(plan)
+    st.caption("Enter the number of people for each added role. Unused roles do not need to be added.")
+    rows = comparison_rows(plan, common=False, include_pending=False)
+    focus = st.session_state.get("review_focus_" + plan.id, {})
+    if focus.get("step") == 1:
+        rows.sort(key=lambda row: row["id"] not in focus.get("roles", []))
+    dormant = {
+        r["id"]
+        for r in rows
+        if r["id"].startswith("common-")
+        and pd.isna(r["Proposed quantity / FTE"])
+        and pd.isna(r["Current quantity / FTE"])
+        and not r.get("Duties / deployment notes")
+    }
+    if dormant and st.button("Remove unused suggested roles", key="remove_unused_suggestions"):
+        commit_rows(plan, [r for r in rows if r["id"] not in dormant])
+        st.session_state.six_epoch = st.session_state.get("six_epoch", 0) + 1
+        st.rerun()
     for row in rows:
         if pd.isna(row["Proposed quantity / FTE"]) and row["Quantity basis"] == "unspecified":
             row["Quantity basis"] = "headcount"  # New input rows use the disclosed whole-person default.
+    if not rows:
+        st.caption("Add the roles needed for this deployment below.")
+        add_role_control(plan, prefix)
+        return []
     key = prefix + "_table"
     st.session_state.six_editor_key = key
     st.session_state[key + "_base"] = rows
     frame = pd.DataFrame(rows)
     for name in ["Current quantity / FTE", "Proposed quantity / FTE", "Change"]:
         frame[name] = pd.to_numeric(frame[name], errors="coerce")
+    has_legacy_units = any(row["Quantity basis"] != "headcount" for row in rows)
     edited = st.data_editor(
         frame,
         key=key,
         hide_index=True,
         width="stretch",
         num_rows="fixed",
-        height=380,
+        height=min(650, 60 + 50 * len(rows)),
         row_height=50,
         placeholder="",
-        disabled=["Change"]
-        + (["Current quantity / FTE"] if plan.current_deployment_status != "known" else []),
+        disabled=["Change", "Quantity basis"],
         on_change=editor_changed,
         args=(key,),
         column_config={
@@ -420,19 +560,27 @@ def manpower_screen(plan):
             "Deployment": None,
             "Role title": st.column_config.TextColumn("Role", required=True, width="large"),
             "Current quantity / FTE": st.column_config.NumberColumn(
-                "Current deployment", min_value=0.0, max_value=10000.0, step=0.5, width="small"
+                "Current quantity" if has_legacy_units else "Current headcount",
+                min_value=0.0,
+                max_value=10000.0,
+                step=1.0,
+                width="small",
             )
             if existing
             else None,
             "Proposed quantity / FTE": st.column_config.NumberColumn(
-                "Proposed deployment", min_value=0.0, max_value=10000.0, step=0.5, width="small"
+                "Proposed quantity" if has_legacy_units else "Proposed headcount",
+                min_value=0.0,
+                max_value=10000.0,
+                step=1.0,
+                width="small",
             ),
             "Change": st.column_config.NumberColumn("Change", width="small", format="%+.2f")
             if existing
             else None,
-            "Quantity basis": st.column_config.SelectboxColumn(
-                "Unit", options=["headcount", "FTE", "posts", "unspecified"], width="small"
-            ),
+            "Quantity basis": st.column_config.TextColumn("Saved unit", width="small")
+            if has_legacy_units
+            else None,
             "Duties / deployment notes": st.column_config.TextColumn(
                 "Operational rationale",
                 width="large",
@@ -448,70 +596,10 @@ def manpower_screen(plan):
     st.caption(
         f"{len(included)} included roles · {excluded} excluded (0) · {len(incomplete)} unanswered proposed entries"
     )
-    deployment_summary(edited.to_dict("records"), existing)
-    if included:
-        st.caption("Included: " + "; ".join(r["Role title"] for r in included))
-    st.caption(
-        "Choose headcount or FTE directly in the Unit column. The same unit applies to current and proposed deployment; their change is calculated automatically."
-    )
-    if any(row["Quantity basis"] == "posts" for row in rows):
-        st.info(
-            "Saved post quantities need an explicit staffing conversion. Enter the supported headcount/FTE quantity and operational rationale in this table; no conversion is inferred."
-        )
-    st.caption(
-        "Table edits are retained automatically. Continue when the entries are complete; copying current figures is optional."
-    )
-    a, b = st.columns(2) if existing else (st, st)
-    if existing and a.button(
-        "Copy current figures (optional)",
-        disabled=not existing or plan.current_deployment_status != "known",
-        key="copy_current",
-    ):
-        values = edited.to_dict("records")
-        for row in values:
-            if pd.notna(row["Current quantity / FTE"]):
-                row["Proposed quantity / FTE"] = row["Current quantity / FTE"]
-        commit_rows(plan, values, staff_defaults=True)
-        st.session_state.six_epoch = st.session_state.get("six_epoch", 0) + 1
-        st.rerun()
-    if b.button("Mark remaining unused roles as zero", key="mark_unused_zero"):
-        values = edited.to_dict("records")
-        for row in values:
-            if pd.isna(row["Proposed quantity / FTE"]):
-                row["Proposed quantity / FTE"] = 0.0
-        commit_rows(plan, values, staff_defaults=True)
-        st.session_state.six_epoch = st.session_state.get("six_epoch", 0) + 1
-        st.rerun()
-    scope = st.radio(
-        "Role list",
-        ["Suggested roles", "Browse all roles"],
-        horizontal=True,
-        key=retained_key(prefix + "_scope"),
-    )
-    selected = st.multiselect(
-        "Add another role",
-        role_options(plan, scope),
-        accept_new_options=True,
-        key=retained_key(prefix + "_add"),
-        placeholder="Choose a role or type a custom title; roles already in the table are hidden",
-    )
-    if st.button("Add selected roles", key="add_selected_roles", disabled=not selected):
-        values = edited.to_dict("records")
-        for title in selected:
-            if title.casefold() not in {r["Role title"].casefold() for r in values}:
-                r = Role(id="role-" + uuid4().hex[:8], label=title)
-                values.append(
-                    {
-                        "id": r.id,
-                        "Role title": title,
-                        "Proposed quantity / FTE": None,
-                        "Current quantity / FTE": None,
-                        "Quantity basis": "unspecified",
-                    }
-                )
-        commit_rows(plan, values, staff_defaults=True)
-        st.session_state.six_epoch = st.session_state.get("six_epoch", 0) + 1
-        st.rerun()
+    deployment_summary(edited.to_dict("records"), existing if plan.contract_kind != "unspecified" else None)
+    if has_legacy_units:
+        legacy_headcount_control(plan, prefix, existing)
+    add_role_control(plan, prefix)
     with st.expander("Additional context (optional)"):
         st.text_area(
             "Anything not covered in the table",
@@ -526,49 +614,119 @@ def manpower_screen(plan):
 
 
 def deployment_summary(rows, existing=False):
-    """Read-only totals retain separate units and explicitly incomplete current data."""
-    head = sum(
-        float(row["Proposed quantity / FTE"])
-        for row in rows
-        if row.get("Quantity basis") == "headcount" and pd.notna(row.get("Proposed quantity / FTE"))
+    from services.headcounts import comparison
+
+    totals = comparison(rows, existing)
+    current, proposed, change = st.columns(3)
+    current.metric(
+        "Current headcount"
+        if not (totals["current_missing"] or totals["legacy_rows"])
+        else "Known current headcount",
+        str(totals["current"]),
     )
-    fte = sum(
-        float(row["Proposed quantity / FTE"])
-        for row in rows
-        if row.get("Quantity basis") == "FTE" and pd.notna(row.get("Proposed quantity / FTE"))
+    proposed.metric(
+        "Proposed headcount"
+        if not (totals["proposed_missing"] or totals["legacy_rows"])
+        else "Known proposed headcount",
+        str(totals["proposed"]),
     )
-    a, b = st.columns(2)
-    a.metric("Proposed headcount", f"{head:g}")
-    b.metric("Proposed FTE", f"{fte:g}")
-    if existing:
-        values = {}
-        for unit in ("headcount", "FTE"):
-            cohort = [row for row in rows if row.get("Quantity basis") == unit]
-            known = sum(
-                float(row["Current quantity / FTE"])
-                for row in cohort
-                if pd.notna(row.get("Current quantity / FTE"))
-            )
-            unknown = sum(pd.isna(row.get("Current quantity / FTE")) for row in cohort)
-            values[unit] = f"{known:g} known" + (f"; {unknown} unanswered rows" if unknown else "")
+    change.metric("Headcount change", f"{totals['change']:+d}" if totals["change"] is not None else "Pending")
+    if totals["current_missing"] or totals["proposed_missing"]:
         st.caption(
-            "Current headcount: "
-            + values["headcount"]
-            + " · Current FTE: "
-            + values["FTE"]
-            + ". Unknown quantities are excluded from these known totals, not treated as zero."
+            f"Incomplete comparison: {totals['current_missing']} current and {totals['proposed_missing']} proposed entries are unanswered or invalid. These are subtotals, not zero assumptions."
+        )
+    if totals["legacy_rows"]:
+        st.caption(
+            f"{totals['legacy_rows']} saved role(s) use earlier units and are excluded from this headcount comparison."
         )
 
 
+def legacy_headcount_control(plan, prefix, existing):
+    rows = comparison_rows(plan, common=False, include_pending=False)
+    legacy = {r["id"]: r["Role title"] for r in rows if r["Quantity basis"] != "headcount"}
+    saved = plan.basis_drafts.get("headcount_entry", {})
+    with st.expander("Update saved quantities to headcount"):
+        st.caption(
+            "Earlier units are retained unchanged. Enter the actual number of people to replace a saved entry; no conversion is assumed."
+        )
+        rid = st.selectbox("Saved role", list(legacy), format_func=legacy.get, key=prefix + "_legacy_role")
+        entered = saved if saved.get("role") == rid else {}
+        entry_key = prefix + "_legacy_" + rid
+        current = (
+            st.number_input(
+                "Current number of people",
+                min_value=0,
+                max_value=10000,
+                value=entered.get("current"),
+                step=1,
+                key=entry_key + "_current",
+                on_change=keep_headcount_entry,
+                args=(entry_key, rid),
+            )
+            if existing
+            else None
+        )
+        proposed = st.number_input(
+            "Proposed number of people",
+            min_value=0,
+            max_value=10000,
+            value=entered.get("proposed"),
+            step=1,
+            key=entry_key + "_proposed",
+            on_change=keep_headcount_entry,
+            args=(entry_key, rid),
+        )
+        if st.button("Use these headcounts", key=prefix + "_legacy_apply", disabled=proposed is None):
+            for row in rows:
+                if row["id"] == rid:
+                    row.update(
+                        {
+                            "Quantity basis": "headcount",
+                            "Proposed quantity / FTE": proposed,
+                            "Current quantity / FTE": current,
+                        }
+                    )
+            commit_rows(plan, rows)
+            plan.basis_drafts.pop("headcount_entry", None)
+            st.session_state.six_epoch = st.session_state.get("six_epoch", 0) + 1
+            st.rerun()
+        if saved and st.button("Clear headcount update", key=prefix + "_legacy_clear"):
+            plan.basis_drafts.pop("headcount_entry", None)
+            st.session_state.six_epoch = st.session_state.get("six_epoch", 0) + 1
+            st.rerun()
+
+
+def keep_headcount_entry(key, rid):
+    st.session_state.plan.basis_drafts["headcount_entry"] = {
+        "role": rid,
+        "current": st.session_state.get(key + "_current"),
+        "proposed": st.session_state.get(key + "_proposed"),
+    }
+
+
 def deployment_review_table(plan):
-    rows = comparison_rows(plan)
+    rows = comparison_rows(plan, common=False, include_pending=False)
     included = [
         row for row in rows if pd.notna(row["Proposed quantity / FTE"]) and row["Proposed quantity / FTE"] > 0
     ]
     key = f"six_{plan.id}_review_{st.session_state.get('six_epoch', 0)}_table"
     st.session_state.six_editor_key = key
     st.session_state[key + "_base"] = included
-    frame = pd.DataFrame(included, columns=list(rows[0]))
+    frame = pd.DataFrame(
+        included,
+        columns=list(rows[0])
+        if rows
+        else [
+            "id",
+            "Role title",
+            "Current quantity / FTE",
+            "Proposed quantity / FTE",
+            "Change",
+            "Quantity basis",
+            "Duties / deployment notes",
+            "Deployment",
+        ],
+    )
     for column in ("Current quantity / FTE", "Proposed quantity / FTE", "Change"):
         frame[column] = pd.to_numeric(frame[column], errors="coerce")
     existing = plan.contract_kind == "existing contract"
@@ -590,7 +748,9 @@ def deployment_review_table(plan):
             if existing
             else None,
             "Proposed quantity / FTE": st.column_config.NumberColumn("Proposed deployment", min_value=0.0),
-            "Quantity basis": st.column_config.SelectboxColumn("Unit", options=["headcount", "FTE"]),
+            "Quantity basis": st.column_config.TextColumn("Saved unit")
+            if any(r["Quantity basis"] != "headcount" for r in rows)
+            else None,
             "Change": st.column_config.NumberColumn("Change", format="%+.2f") if existing else None,
             "Duties / deployment notes": st.column_config.TextColumn("Operational rationale", width="large"),
         },
@@ -606,5 +766,5 @@ def deployment_review_table(plan):
 def validate_manpower(plan):
     if plan.contract_kind == "unspecified":
         raise ValueError("Choose Existing contract or New site / service above the manpower table.")
-    rows = comparison_rows(plan)
+    rows = comparison_rows(plan, common=False, include_pending=False)
     validate_comparison(rows)
