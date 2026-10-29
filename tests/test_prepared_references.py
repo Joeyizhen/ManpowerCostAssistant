@@ -397,8 +397,11 @@ def test_four_active_workflows_and_prepared_historical_export(prepared, monkeypa
     label(at.date_input, "Contract start date").set_value(date(2026, 1, 1)).run()
     label(at.button, "Save project and continue").click().run()
     label(at.button, "Use example tender").click().run()
-    label(at.button, "Verify the submission and match roles").click().run()
-    label(at.button, "Confirm roles and choose comparison settings").click().run()
+    label(at.button, "Continue: verify all submissions and match roles").click().run()
+    label(
+        at.checkbox, "I have checked the role matches and confirm they can be used for this comparison."
+    ).check().run()
+    label(at.button, "Confirm data and choose comparison settings").click().run()
     assert not at.exception
     label(at.button, "Compare tender pricing").click().run()
     assert not at.exception

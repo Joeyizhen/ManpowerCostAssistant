@@ -22,6 +22,8 @@ python -m venv .venv
 
 The requirements are exported from the lockfile. Tests/lint need `uv sync` with its dev dependency group, rather than runtime-only requirements. On another OS use its virtual-environment executable path. Run from the repository root for consistent configuration/storage paths.
 
+If a previously modified package cache causes dependency import failures, use `uv sync --frozen --no-cache` in a fresh checkout/environment. The consolidation verification used fresh locked downloads after detecting modified cached files. Keep the live app's environment separate from installation tests. On Windows, a shorter checkout/test-scratch path avoids snapshot paths exceeding the platform limit.
+
 No key is needed for ordinary examples, calculations or exports. Optional AI requires private `OPENAI_API_KEY` and `OPENAI_MODEL`. Actual `.env`/`.streamlit/secrets.toml` files are ignored. Never put secrets in commands, build arguments, source or sample workbooks. Shared hosts should use server-side secrets.
 
 ## Data required on another machine

@@ -186,7 +186,11 @@ def load_synthetic_history():
     roles = {
         "Contract Manager": 9800,
         "Facilities Manager": 8200,
+        "Senior Facilities Manager": 11800,
         "Assistant Facilities Manager": 6500,
+        "Property Executive": 5600,
+        "Administrative Assistant": 3900,
+        "BMS/BOS Officer": 6900,
         "M&E Engineer": 6200,
         "Technical Executive": 4900,
         "Technician": 4100,
@@ -629,6 +633,8 @@ def compare_with_history(
     for tenderer, g in comp.groupby("Tenderer"):
         usable = g[g["Adjusted Historical Benchmark (SGD)"].notna()]
         submitted = float(g["Tendered Full-Contract Cost (SGD)"].sum())
+        comparable_submitted = float(usable["Tendered Full-Contract Cost (SGD)"].sum())
+        comparison_coverage = comparable_submitted / submitted if submitted > 0 else 0.0
         months = int(project.get("contract_duration_months") or 72)
         benchmark = float(
             (usable["Adjusted Historical Benchmark (SGD)"] * usable["Tendered Quantity"] * months).sum()
@@ -651,13 +657,19 @@ def compare_with_history(
                 * months
             ).sum()
         )
-        variance = submitted - benchmark
-        pct = variance / benchmark if benchmark else None
+        # Do not present a whole-tender conclusion when the historical evidence
+        # covers only a small share of the uploaded price. Eighty percent is a
+        # cautious review threshold, not an award rule.
+        has_comparable_total = not usable.empty and benchmark > 0 and comparison_coverage >= 0.80
+        variance = comparable_submitted - benchmark if has_comparable_total else None
+        pct = variance / benchmark if has_comparable_total else None
         position = (
-            "Above the adjusted historical range"
-            if submitted > hi
+            "Manual review — insufficient comparable historical evidence"
+            if not has_comparable_total
+            else "Above the adjusted historical range"
+            if comparable_submitted > hi
             else "Below the adjusted historical range"
-            if submitted < lo
+            if comparable_submitted < lo
             else "Within the adjusted historical range"
         )
         impact_order = (
@@ -671,9 +683,11 @@ def compare_with_history(
             {
                 "Tenderer": tenderer,
                 "Submitted Total Cost (SGD)": submitted,
-                "Adjusted Historical Expected Total (SGD)": benchmark,
-                "Adjusted Typical Range Low (SGD)": lo,
-                "Adjusted Typical Range High (SGD)": hi,
+                "Comparable Submitted Cost (SGD)": comparable_submitted,
+                "Comparable Cost Coverage (%)": comparison_coverage,
+                "Adjusted Historical Expected Total (SGD)": benchmark if has_comparable_total else None,
+                "Adjusted Typical Range Low (SGD)": lo if has_comparable_total else None,
+                "Adjusted Typical Range High (SGD)": hi if has_comparable_total else None,
                 "Total Variance (SGD)": variance,
                 "Total Variance (%)": pct,
                 "Overall Interpretation": position,

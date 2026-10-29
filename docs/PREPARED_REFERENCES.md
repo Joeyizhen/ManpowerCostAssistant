@@ -12,7 +12,7 @@ Reference services can resolve versioned prepared snapshots from `MANPOWER_REFER
 
 No workbook, raw record population or private activation pointer is published. The current owner's v3 activation remains local and unchanged. Older v2 investigation reports are historical and must not be interpreted as deployment instructions. Consolidation does not import, clean, regenerate reference records or activate a version.
 
-`scripts/import_references.py` and `scripts/reference_report.py` are developer tools for separately authorised reference administration; they are not required for app startup. Inspect their CLI help and the team's approved data instructions before use. Do not run an import or activation merely because a deployment lacks private sources.
+`scripts/import_references.py` and `scripts/reference_report.py` are developer tools for separately authorised reference administration; they are not required for app startup. Review the tools and the team's approved data instructions before use. Diagnostic reports can contain private source detail and must stay local. Do not run an import or activation merely because a deployment lacks private sources.
 
 ## Evidence meaning
 

@@ -59,6 +59,21 @@ SERVICE_OPTIONS = [
     "Building Maintenance",
     "Other FM Services",
 ]
+MAX_TENDERERS = 5
+TRACK4_ROLE_ALIASES = {
+    "facility manager": "Facilities Manager",
+    "facilities manager (fm)": "Facilities Manager",
+    "senior facility manager": "Senior Facilities Manager",
+    "senior facilities manager (sfm)": "Senior Facilities Manager",
+    "assistant facility manager": "Assistant Facilities Manager",
+    "assistant facilities manager": "Assistant Facilities Manager",
+    "administrative assistant": "Administrative Assistant",
+    "admin assistant": "Administrative Assistant",
+    "property executive": "Property Executive",
+    "building management system officer (bms officer) / building optimisation system officer (bos officer)": "BMS/BOS Officer",
+    "bms officer": "BMS/BOS Officer",
+    "technician (mobile)": "Technician",
+}
 
 
 def _initialise():
@@ -79,6 +94,11 @@ def _initialise():
         "track4_analysis_fingerprint": None,
         "track4_last_analysis": None,
         "track4_policy_evidence": policy_evidence_snapshot(),
+        "track4_upload_form_open": True,
+        "track4_upload_version": 0,
+        "track4_upload_notice": None,
+        "track4_roles_confirmed": False,
+        "track4_role_review_fingerprint": None,
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
@@ -146,6 +166,8 @@ def _restore(raw: bytes):
         return None if value is None else pd.read_json(StringIO(value), orient="table")
 
     st.session_state.track4_project = payload.get("project", {})
+    st.session_state.track4_roles_confirmed = False
+    st.session_state.track4_role_review_fingerprint = None
     st.session_state.track4_filters = payload.get("filters", {})
     st.session_state.track4_last_analysis = payload.get("last_analysis")
     st.session_state.track4_analysis_fingerprint = payload.get("analysis_fingerprint")
@@ -198,8 +220,8 @@ def _money(value):
 
 
 def _position_label(variance):
-    if pd.isna(variance):
-        return "Insufficient comparable data", "#526277"
+    if variance is None or pd.isna(variance):
+        return "🔵 Manual review required", "#1769aa"
     value = float(variance)
     if value >= 0.15:
         return "🔴 Much higher than usual", "#c0392b"
@@ -220,17 +242,51 @@ def _overall_visual(overall):
         key=retained_key("navigation_agent2_track4_views_186"),
     )
     row = overall[overall["Tenderer"] == selected].iloc[0]
-    submitted = float(row["Submitted Total Cost (SGD)"])
-    if pd.isna(row["Adjusted Historical Expected Total (SGD)"]):
-        st.metric("Your submitted price", _money(submitted))
-        st.info(
-            "Insufficient comparable data for a full reference total. Submitted figures are unchanged; no zero benchmark is substituted."
+    submitted_total = float(row["Submitted Total Cost (SGD)"])
+    raw_comparable_submitted = row.get("Comparable Submitted Cost (SGD)", submitted_total)
+    submitted = float(raw_comparable_submitted) if pd.notna(raw_comparable_submitted) else submitted_total
+    coverage = row.get("Comparable Cost Coverage (%)")
+    coverage_text = (
+        f"{float(coverage):.0%}" if coverage is not None and pd.notna(coverage) else "an unestablished share"
+    )
+    raw_norm = row["Adjusted Historical Expected Total (SGD)"]
+    raw_low = row["Adjusted Typical Range Low (SGD)"]
+    raw_high = row["Adjusted Typical Range High (SGD)"]
+    raw_variance = row["Total Variance (%)"]
+    has_benchmark = all(pd.notna(value) for value in (raw_norm, raw_low, raw_high, raw_variance))
+    if not has_benchmark:
+        status, color = _position_label(None)
+        st.markdown(
+            f"""
+<div style="border:1px solid #d7dee8;border-radius:12px;padding:20px 22px;background:#fff;">
+  <div style="font-size:1.05rem;font-weight:750;margin-bottom:6px;">Where {selected} stands</div>
+  <div style="color:#5d6b7e;margin-bottom:18px;">A reliable overall benchmark could not be calculated from the currently matched historical records.</div>
+  <div style="border-left:5px solid {color};background:#eef5fb;padding:14px 16px;border-radius:6px;">
+    <div style="font-weight:750;color:{color};margin-bottom:5px;">{status}</div>
+    <div>Comparable historical evidence currently covers {coverage_text} of the submitted cost. Review the role matches and blue manual-review items; the assistant will not invent a whole-tender range.</div>
+  </div>
+</div>
+            """,
+            unsafe_allow_html=True,
+        )
+        cols = st.columns(4)
+        cols[0].metric("Your submitted price", _money(submitted_total))
+        cols[1].metric("Past-submission norm", "Not available")
+        cols[2].metric("Difference", "Not measurable")
+        cols[3].markdown(
+            f"""
+<div style="border:1px solid #d7dee8;border-radius:10px;padding:13px 16px;min-height:88px;display:flex;flex-direction:column;justify-content:center;">
+  <div style="font-size:.76rem;color:#607086;font-weight:700;margin-bottom:7px;">OVERALL POSITION</div>
+  <div style="font-size:1.05rem;font-weight:750;color:{color};line-height:1.25;">{status}</div>
+</div>
+            """,
+            unsafe_allow_html=True,
         )
         return selected
-    norm = float(row["Adjusted Historical Expected Total (SGD)"])
-    low = float(row["Adjusted Typical Range Low (SGD)"])
-    high = float(row["Adjusted Typical Range High (SGD)"])
-    variance = float(row["Total Variance (%)"])
+    norm = float(raw_norm)
+    low = float(raw_low)
+    high = float(raw_high)
+    variance = float(raw_variance)
     status, color = _position_label(variance)
     axis_low = min(low, submitted) * 0.96
     axis_high = max(high, submitted) * 1.04
@@ -281,7 +337,7 @@ def _overall_visual(overall):
             f"({_money(low)} to {_money(high)})."
         )
     cols = st.columns(4)
-    cols[0].metric("Your submitted price", _money(submitted))
+    cols[0].metric("Comparable submitted price", _money(submitted))
     cols[1].metric("Past-submission norm", _money(norm))
     cols[2].metric("Difference", _money(submitted - norm), f"{variance:+.1%}")
     cols[3].markdown(
@@ -303,7 +359,8 @@ def _render_overall_assessment(result, tenderer):
         st.write(overall["Overall Interpretation"])
         st.caption(overall["Important Limitation"])
         return
-    variance = float(overall["Total Variance (%)"])
+    raw_variance = overall["Total Variance (%)"]
+    variance = float(raw_variance) if pd.notna(raw_variance) else None
     status, _ = _position_label(variance)
     findings = result.findings[result.findings["Tenderer"] == tenderer]
     attention = findings[findings["Priority"].isin(["High", "Medium", "Manual review"])]
@@ -315,14 +372,24 @@ def _render_overall_assessment(result, tenderer):
         with st.expander("Evidence used by the AI assessment"):
             st.write(narrative["Evidence Basis"])
     else:
-        st.markdown(
-            f"""
+        if variance is None:
+            st.markdown(
+                f"""
+- **Position:** {status}; an overall percentage cannot be calculated from the available comparable records.
+- **Assessment:** The assistant has kept the result in manual review instead of creating an unsupported benchmark.
+- **Roles needing attention:** {roles}.
+- **What to clarify:** Confirm the role matches, pricing unit, scope, staffing and whether more comparable historical records are available.
+                """
+            )
+        else:
+            st.markdown(
+                f"""
 - **Position:** {status}; the submitted total is **{variance:+.1%}** against the comparable norm.
 - **Assessment:** The submitted price is compared with the acceptable benchmark range after historical wage adjustment.
 - **Roles needing attention:** {roles}.
 - **What to clarify:** Confirm scope, staffing, relief coverage, statutory contributions and policy-related allowances.
-            """
-        )
+                """
+            )
 
 
 def _priority_style(frame):
@@ -470,34 +537,103 @@ def render_agent2_track4(cfg=None):
                     st.session_state.track4_step = 2
                     st.rerun()
     elif step == 2:
-        st.header("Upload your tender submission")
+        st.header("Upload tenderer submissions")
         st.write(
-            "Upload the pricing schedule you want reviewed. The comparison database is already built into the assistant."
+            "Upload each tenderer separately. After a submission is added, the form clears so you "
+            "can add the next tenderer for a separate historical comparison."
         )
+        tenderer_count = len(st.session_state.track4_tenderers)
+        limit_reached = tenderer_count >= MAX_TENDERERS
+        st.caption(f"{tenderer_count} of {MAX_TENDERERS} tenderer submissions added")
+        version = st.session_state.track4_upload_version
         name = st.text_input(
             "Tenderer name",
-            placeholder="e.g. Tenderer A",
-            key=retained_key("navigation_agent2_track4_views_395"),
+            placeholder=f"e.g. Tenderer {chr(65 + tenderer_count)}",
+            key=retained_key(f"track4_tenderer_name_{version}"),
+            disabled=limit_reached,
         )
         files = st.file_uploader(
-            "Upload the tender document",
+            "Upload one verified manpower schedule",
             type=["csv", "xlsx", "xls", "json"],
             accept_multiple_files=True,
+            key=f"track4_tenderer_files_{version}",
+            disabled=limit_reached,
+            help=(
+                "Supports flat role tables and multi-tab composition-of-rates workbooks. "
+                "The assistant reads the contract year from each worksheet name/title and "
+                "combines repeated site rate/quantity blocks by role."
+            ),
         )
-        if st.button("Add tenderer submission"):
+        if st.button(
+            "Upload and add this tenderer",
+            disabled=limit_reached,
+            help="Add this submission, then clear the form for the next tenderer.",
+        ):
             if not name.strip() or not files:
-                st.error("Enter a tenderer name and choose at least one completed schedule.")
+                st.error("Enter a tenderer name and select at least one completed schedule.")
+            elif name.strip() in st.session_state.track4_tenderers:
+                st.error(
+                    "That tenderer name has already been added. Use a different name, or remove "
+                    "the existing submission before replacing it."
+                )
             else:
                 try:
-                    st.session_state.track4_tenderers[name.strip()] = pd.concat(
-                        [parse_upload(file.name, file.getvalue()) for file in files], ignore_index=True
+                    extracted = pd.concat(
+                        [parse_upload(file.name, file.getvalue()) for file in files],
+                        ignore_index=True,
                     )
+                    st.session_state.track4_tenderers[name.strip()] = extracted
                     st.session_state.track4_result = None
-                    st.success(f"{name.strip()} was added.")
+                    st.session_state.track4_roles_confirmed = False
+                    issue_count = len(validation_issues(extracted))
+                    st.session_state.track4_upload_notice = (
+                        f"{name.strip()} added with {issue_count} validation issue(s). "
+                        "Review the extracted data before comparison."
+                        if issue_count
+                        else f"{name.strip()} submission accepted with no input validation issues."
+                    )
+                    st.session_state.track4_upload_version += 1
+                    st.rerun()
                 except Track3InputError as exc:
                     st.error(str(exc))
+        if st.session_state.track4_upload_notice:
+            st.success(st.session_state.track4_upload_notice)
         if st.session_state.track4_tenderers:
-            st.write("**Tenderers added:** " + ", ".join(st.session_state.track4_tenderers))
+            st.markdown("#### Uploaded tenderers")
+            remove_name = None
+            for tenderer_name, frame in st.session_state.track4_tenderers.items():
+                years = ", ".join(str(value) for value in sorted(frame["Contract Year"].dropna().unique()))
+                with st.container(border=True):
+                    details, remove = st.columns([4, 1])
+                    issue_count = len(validation_issues(frame))
+                    if issue_count:
+                        details.error(
+                            f"{tenderer_name}: Needs correction — {issue_count} validation issue(s)."
+                        )
+                    else:
+                        details.success(f"{tenderer_name}: Ready for verification.")
+                    details.caption(f"{len(frame)} extracted role-year rows · Contract year(s): {years}")
+                    if remove.button(
+                        "Remove",
+                        key=f"track4_remove_tenderer_{tenderer_name}",
+                        width="stretch",
+                    ):
+                        remove_name = tenderer_name
+            if remove_name is not None:
+                st.session_state.track4_tenderers.pop(remove_name, None)
+                st.session_state.track4_mappings = None
+                st.session_state.track4_roles_confirmed = False
+                st.session_state.track4_result = None
+                st.session_state.track4_analysis_fingerprint = None
+                st.session_state.track4_upload_version += 1
+                st.rerun()
+            if tenderer_count < MAX_TENDERERS:
+                st.info(
+                    "Use the cleared form above to upload the next tenderer. "
+                    "You can compare up to five submissions."
+                )
+            else:
+                st.info("Five tenderers have been added. Remove one to upload a replacement.")
         with st.expander("Need an example to explore the feature?"):
             st.caption(
                 "This loads a clearly labelled demonstration tender. It does not replace or upload the comparison database."
@@ -507,18 +643,34 @@ def render_agent2_track4(cfg=None):
                     include_comparison_vendors=True
                 )
                 st.session_state.track4_mappings = None
+                st.session_state.track4_roles_confirmed = False
                 st.session_state.track4_result = None
                 st.session_state.track4_analysis_fingerprint = None
                 st.rerun()
         if st.button(
-            "Verify the submission and match roles",
+            "Continue: verify all submissions and match roles",
             type="primary",
             disabled=not st.session_state.track4_tenderers or st.session_state.track4_history is None,
         ):
             st.session_state.track4_step = 3
             st.rerun()
     elif step == 3:
-        st.header("Verify extracted data, role matches and scope")
+        st.header("Validation results and extracted tender data")
+        st.write(
+            "Review every uploaded value before comparison. Missing or contradictory values are never guessed or treated as zero."
+        )
+        issue_frames = []
+        for document_name, document_frame in st.session_state.track4_tenderers.items():
+            document_issues = validation_issues(document_frame)
+            if not document_issues.empty:
+                document_issues.insert(0, "Document", document_name)
+                issue_frames.append(document_issues)
+        if issue_frames:
+            all_issues = pd.concat(issue_frames, ignore_index=True)
+            st.error(f"Comparison stopped: resolve {len(all_issues)} input issue(s) below.")
+            st.dataframe(all_issues, hide_index=True, width="stretch")
+        else:
+            st.success("All tenderer submissions passed input validation.")
         valid = True
         for name, frame in st.session_state.track4_tenderers.items():
             st.subheader(name)
@@ -529,7 +681,14 @@ def render_agent2_track4(cfg=None):
             if not issues.empty:
                 st.error(f"Resolve {len(issues)} missing or invalid value(s).")
                 st.dataframe(issues, hide_index=True)
-        mapping = role_mapping_table(st.session_state.track4_tenderers)
+        history_roles = sorted(st.session_state.track4_history["Standard Role"].dropna().astype(str).unique())
+        mapping = role_mapping_table(
+            st.session_state.track4_tenderers,
+            standard_roles=history_roles,
+            aliases={}
+            if "Dataset Version" in st.session_state.track4_history.columns
+            else TRACK4_ROLE_ALIASES,
+        )
         previous = st.session_state.track4_mappings
         if previous is not None and not previous.empty:
             saved = previous.set_index(["Submitted by", "Role title in submission"])["Compare as"]
@@ -541,7 +700,10 @@ def render_agent2_track4(cfg=None):
             )
         st.subheader("Check how each role will be compared")
         st.info(
-            "To amend a match, click its **Role used for comparison** cell, open the dropdown and choose the correct role. Your selection will be used in the pricing review."
+            "A role is matched only when its title or an approved synonym exists in the comparison "
+            "database. If no equivalent is found, check the duties before selecting a database role. "
+            "Leaving the submitted title unchanged keeps it in manual review instead of forcing a "
+            "misleading comparison."
         )
         mapping = st.data_editor(
             mapping,
@@ -549,13 +711,45 @@ def render_agent2_track4(cfg=None):
             width="stretch",
             column_config={
                 "Compare as": st.column_config.SelectboxColumn(
-                    "Role used for comparison", options=role_mapping_options(mapping), required=True
+                    "Role used for comparison",
+                    options=role_mapping_options(mapping, history_roles),
+                    required=True,
                 )
             },
             disabled=["Submitted by", "Role title in submission", "Why this is suggested"],
         )
         st.session_state.track4_mappings = mapping
-        if st.button("Confirm roles and choose comparison settings", type="primary", disabled=not valid):
+        review_fingerprint = historical_input_fingerprint(
+            st.session_state.track4_tenderers,
+            mapping,
+            {},
+        )
+        review_key = retained_key("track4_role_review")
+        if st.session_state.track4_role_review_fingerprint != review_fingerprint:
+            st.session_state.track4_roles_confirmed = False
+            st.session_state[review_key] = False
+        st.session_state.track4_role_review_fingerprint = review_fingerprint
+        roles_confirmed = st.checkbox(
+            "I have checked the role matches and confirm they can be used for this comparison.",
+            disabled=not valid,
+            key=review_key,
+        )
+        st.session_state.track4_roles_confirmed = roles_confirmed
+        can_continue = valid and roles_confirmed
+        continue_help = None
+        if not can_continue:
+            continue_help = (
+                "Unable to proceed: resolve the validation errors above."
+                if not valid
+                else "Unable to proceed: confirm the role matches above."
+            )
+            st.info(continue_help)
+        if st.button(
+            "Confirm data and choose comparison settings",
+            type="primary",
+            disabled=not can_continue,
+            help=continue_help,
+        ):
             st.session_state.track4_step = 4
             st.rerun()
     elif step == 4:
@@ -563,6 +757,18 @@ def render_agent2_track4(cfg=None):
         st.info(
             "The assistant first matches the role and pricing unit, then looks for past submissions with similar contract context. If too few matches are available, it clearly flags that the result needs manual review."
         )
+        history = st.session_state.track4_history
+        prepared_active = "Dataset Version" in history.columns
+        if prepared_active:
+            st.info(
+                "Prepared source quotations: calendar pricing years and operational coverage remain unverified."
+            )
+        else:
+            available_years = sorted(history["Pricing Year"].dropna().astype(int).unique())
+            min_year, max_year = min(available_years), max(available_years)
+            st.caption(
+                f"Synthetic demonstration: {len(history)} invented records, pricing years {min_year}–{max_year}."
+            )
         project, old = st.session_state.track4_project, st.session_state.track4_filters
         c1, c2, c3 = st.columns(3)
         facility_options = ["Any"] + FACILITY_OPTIONS[1:]
@@ -592,12 +798,17 @@ def render_agent2_track4(cfg=None):
                 "Facility/service metadata are unknown in the prepared selection. A restrictive context filter may leave no comparable evidence; it is never broadened automatically."
             )
         else:
+            selected_year = int(old.get("Pricing Year From", min_year))
+            selected_year = min(max(selected_year, min_year), max_year)
             year_from = c3.number_input(
                 "Use submissions from",
-                2020,
-                2035,
-                int(old.get("Pricing Year From", 2022)),
-                key=retained_key("navigation_agent2_track4_views_491"),
+                min_year,
+                max_year,
+                selected_year,
+                help=(
+                    f"Choose {min_year} for the broadest evidence base. A later year uses fewer records "
+                    "and may increase manual-review results."
+                ),
             )
         filters = {
             "Facility Type": facility,
@@ -605,9 +816,10 @@ def render_agent2_track4(cfg=None):
             "Pricing Year From": int(year_from) if year_from is not None else None,
         }
         st.session_state.track4_filters = filters
-        st.caption(
-            "The role and pricing unit are matched automatically. You can narrow the comparison by facility, service and earliest submission year."
-        )
+        if not prepared_active:
+            st.caption(
+                f"Synthetic examples start at {min_year}. Choose filters appropriate to the comparison context."
+            )
         if st.button("Compare tender pricing", type="primary"):
             mapping_dict = {
                 (row["Submitted by"], row["Role title in submission"]): row["Compare as"]
@@ -677,6 +889,17 @@ def render_agent2_track4(cfg=None):
                             result, create_client(configured.api_key), configured.model
                         )
                     st.rerun()
+            elif configured.api_key:
+                st.warning(
+                    "The OpenAI API key was detected, but no model has been configured. Add an "
+                    "OPENAI_MODEL value to the private .env file, then restart the app. The "
+                    "verified calculations remain available without AI."
+                )
+            elif configured.model:
+                st.warning(
+                    "An OpenAI model is configured, but the API key is missing. Add the key to the "
+                    "private .env file and restart the app."
+                )
             else:
                 st.caption(
                     "Connect OpenAI to assess the main role, scope and quantity drivers using the recorded calculations and reference limitations."
@@ -752,7 +975,9 @@ def render_agent2_track4(cfg=None):
         with roles_tab:
             st.subheader("Role-by-role pricing at a glance")
             st.caption(
-                "Prepared source median; actual calendar pricing year unknown. No time adjustment." if "Dataset Version" in result.comparisons else "The norm is the middle price from comparable past submissions, restated to the tender year."
+                "Prepared source median; actual calendar pricing year unknown. No time adjustment."
+                if "Dataset Version" in result.comparisons
+                else "The norm is the middle price from comparable past submissions, restated to the tender year."
             )
             tenderer = st.selectbox(
                 "Submitted proposal",

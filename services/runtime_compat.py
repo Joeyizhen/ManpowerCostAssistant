@@ -52,7 +52,7 @@ def recover_stale_imports(modules):
     review = modules.get("review_inputs")
     old_review = review is not None and getattr(review, "FINAL_REVIEW_UI_VERSION", None) != 20
     pricing = modules.get("pricing_inputs")
-    old_pricing = pricing is not None and getattr(pricing, "PRICING_UI_VERSION", None) != 7
+    old_pricing = pricing is not None and getattr(pricing, "PRICING_UI_VERSION", None) != 8
     proposal = modules.get("proposal_inputs")
     old_proposal = proposal is not None and getattr(proposal, "PROPOSAL_UI_VERSION", None) != 6
     evidence = modules.get("services.evidence")

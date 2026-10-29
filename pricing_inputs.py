@@ -18,7 +18,7 @@ from services.reference_data import prepared
 from services.ui_context import current_plan
 from services.workflow import apply_change, invalidate
 
-PRICING_UI_VERSION = 7
+PRICING_UI_VERSION = 8
 
 
 def rate_changed(rid, field, key, peer=None):
@@ -224,7 +224,7 @@ def starting_prices(plan, records, officer, save, sync):
                 )
             )
         )
-        if ask_note or plan.basis_drafts.get("pricing_document_editors", {}).get(role.id):
+        if ask_note or (not shared and plan.basis_drafts.get("pricing_document_editors", {}).get(role.id)):
             plan.basis_drafts.setdefault("pricing_document_editors", {})[role.id] = True
             c.text_area(
                 "Short pricing reason — " + role.label,
@@ -241,7 +241,9 @@ def starting_prices(plan, records, officer, save, sync):
         source_value = plan.basis_drafts.get("pricing_sources", {}).get(
             role.id, prior.snapshots[role.id].get("quotation_reference", "") if prior else ""
         )
-        if ask_note or source_value or plan.basis_drafts.get("pricing_document_editors", {}).get(role.id):
+        if not shared and (
+            ask_note or source_value or plan.basis_drafts.get("pricing_document_editors", {}).get(role.id)
+        ):
             c.text_input(
                 "Quotation / document (optional) — " + role.label,
                 value=source_value,

@@ -20,6 +20,7 @@ def start(monkeypatch, tmp_path):
         raise AssertionError("Navigation and ordinary calculations must not call a paid model")
 
     monkeypatch.setattr(agent2_track4_views, "create_client", forbidden)
+    monkeypatch.setattr(agent2_views, "create_client", forbidden)
     return AppTest.from_file(Path(__file__).resolve().parents[1] / "app.py", default_timeout=60).run()
 
 
@@ -112,8 +113,25 @@ def test_standalone_tender_calculations_exports_and_navigation_are_offline(monke
     label(at.date_input, "Contract start date").set_value(date(2026, 1, 1)).run()
     label(at.button, "Save project and continue").click().run()
     label(at.button, "Use example tender").click().run()
-    label(at.button, "Verify the submission and match roles").click().run()
-    label(at.button, "Confirm roles and choose comparison settings").click().run()
+    label(at.button, "Continue: verify all submissions and match roles").click().run()
+    label(
+        at.checkbox, "I have checked the role matches and confirm they can be used for this comparison."
+    ).check().run()
+    original_mapping = at.session_state["track4_mappings"].copy(deep=True)
+    changed_mapping = original_mapping.copy(deep=True)
+    changed_mapping.loc[0, "Compare as"] = "Technician"
+    at.session_state["track4_mappings"] = changed_mapping
+    at.run()
+    assert not label(
+        at.checkbox, "I have checked the role matches and confirm they can be used for this comparison."
+    ).value
+    assert label(at.button, "Confirm data and choose comparison settings").disabled
+    at.session_state["track4_mappings"] = original_mapping
+    at.run()
+    label(
+        at.checkbox, "I have checked the role matches and confirm they can be used for this comparison."
+    ).check().run()
+    label(at.button, "Confirm data and choose comparison settings").click().run()
     label(at.button, "Compare tender pricing").click().run()
     assert not at.exception
     assert at.session_state["track4_result"].narrative.iloc[0]["Status"] == "Deterministic fallback"

@@ -14,7 +14,7 @@ Track 5 historical-data maintenance is planned. Trusted transfer of a live budge
 Python 3.14 is the tested development version. The declared range is 3.11–3.14; other versions have not been verified. Select the consolidated branch from the PR, or a reviewed `main` containing it, then run:
 
 ```powershell
-git clone https://github.com/Joeyizhen/ManpowerCostAssistant.git
+git clone --branch codex/consolidate-application https://github.com/Joeyizhen/ManpowerCostAssistant.git
 cd ManpowerCostAssistant
 uv sync --frozen --python 3.14
 Copy-Item .env.example .env

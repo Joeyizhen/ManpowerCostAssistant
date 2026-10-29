@@ -127,7 +127,7 @@ if st.session_state.selected_track == 2:
 if st.session_state.selected_track == 3:
     from agent2_views import render_agent2_track3
 
-    render_agent2_track3()
+    render_agent2_track3(cfg)
     st.stop()
 
 if st.session_state.selected_track == 4:

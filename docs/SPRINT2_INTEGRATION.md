@@ -1,58 +1,51 @@
-# Shared reference increment — 27 October 2026
+# Combined application — 30 October 2026
 
-Prepared selection **bf02f4c629b7f181-sprint2-reference-v1** is now activated for both activities on `integration/sprint2`. The following navigation report is historical; its statements about inactive v2/unchanged evidence services describe the preceding milestone. See [the shared reference report](PREPARED_REFERENCES.md) for eligibility, equal-submission sampling, source examples, PWM differences, checks and reversible activation. Live budget transfer and direct cross-tenderer comparison are still separate follow-ups.
+## Source history
 
----
+The consolidation branch is `codex/consolidate-application`, based on local `integration/sprint2` at `b743d98`. Local budgeting/proposal refinements, templates, services, tests and documentation were preserved before integration.
 
-# Sprint 2 combined application — 27 October 2026
+The GitHub fetch found the teammate's `feature/agent2` at `c8e42e2`. Its three new commits are:
 
-This is a local navigation and composition milestone. It makes four existing workflows accessible in one application. It does not establish a trusted cross-track handoff or activate shared historical data.
-
-## Source preservation
-
-- Shared baseline: `02cbfc9`.
-- Agent 1 local checkpoint: `ec759de`, created on `feature/agent1` from an explicit reviewed 68-file list. Before that commit, all 256 tests passed in 248.42 seconds; lint and privacy checks passed. The complete indexed privacy audit inspected 107 files and 23 exclusion probes with zero findings.
-- Agent 2 source: `a7923f3` on `origin/feature/agent2`, including earlier `88248da`. Both remote developer branches and remote main were refreshed and left unchanged.
-- Integration work is on `integration/sprint2`, based on the Agent 1 checkpoint. Conflicts in app.py, README, collaboration guide and project brief were composed individually. Current budgeting screens were preserved, alongside the teammate's new modules and tests.
-- The Agent 2 calculation services remain identical to their source commit. Existing Agent 1 calculator, model, storage, evidence and transfer-contract implementations are unchanged by this navigation increment.
-
-No push, merge into main, force-push, reset or deployment is part of this task. Private saved projects, uploads, credentials, runtime outputs and environments are excluded from the commits.
-
-## Officer-facing navigation
-
-The landing page asks **What would you like to do?** and offers two equally prominent activities:
-
-| Activity | Available tasks |
+| Commit | Teammate change |
 |---|---|
-| Manpower budgeting | Build a new budget; Review a proposed budget |
-| Tender evaluation | Compare submissions against an approved budget; Compare tenderer proposals |
+| `f1f16f0` | Improve Agent 2 Track 3/4 validation workflows |
+| `3eb022c` | Show only Agent 2 tracks on its landing page |
+| `c8e42e2` | Align Track 4 landing button style |
 
-Normal navigation omits agent architecture and track numbers. Each task has Back to activity options and Change activity actions, plus a current activity/task caption. Historical data management appears only as a Planned secondary status.
+Earlier teammate commits `88248da` and `a7923f3` remain ancestors of the combined branch. The user referred to this teammate contribution as “track 2”; the branch/entrypoints establish that it is Agent 2, whose implemented workflows are Tracks 3/4. Agent 1's Track 2 is still proposal review.
 
-Each workflow keeps its own state. Navigation caches registered value inputs, including unfinished answers, separately from the recorded models. Button events and uploaded-file handles are never replayed. Tender project fields use immediately retained inputs while their explicit Save project and continue action still controls acceptance. Existing save, discard, restore and confirmation protections remain in the budgeting workflows. Navigation itself neither saves to the database nor confirms a decision. Save/download is still needed to retain work after the session ends.
+The consolidation uses a merge to preserve teammate history and a PR into `main` for shared review. It does not force-push either developer branch or silently merge the PR.
 
-Ordinary historical comparison is deterministic. The previous automatic model call on Compare tender pricing has been removed; optional AI explanation requires a separate button and uses the application's configured credentials without displaying them. No paid model evaluation was run.
+## Integrated behaviour
 
-## Available behaviour and honest boundaries
+One `app.py` exposes Manpower budgeting and Tender evaluation, with all four workflows. Agent 1 retains five visible budget screens and upload-first proposal review, original/revised figures, retained saved inputs, deterministic calculations, evidence exports and explicit confirmations.
 
-Tracks 1 and 2 retain their six-screen and three-screen journeys. Track 3 retains standalone verified schedule comparison, role matching, findings, clarification questions and workbook export. Track 4 retains its historical comparison, source/assumption views, officer review and export; it explicitly states that direct like-for-like cross-tenderer comparison is not yet available.
+The teammate increment adds composition-of-rates workbook parsing across year tabs/site blocks, upload feedback, correction visibility, up to five tenderers, removal/replacement controls, reviewable role choices, an explicit Track 4 role-confirmation action and clearer historical-coverage handling. Supported extraction still needs officer verification. Legacy XLS requires its optional reader; XLSX/CSV/JSON are the normal tender-schedule route. PDF/Word tender schedule extraction is not implemented.
 
-No live Track 1/2 project is selectable as a tender baseline. Existing standalone inputs and labelled synthetic examples are used for this milestone. Do not represent an uploaded approved label or an officer checkbox as authenticated management approval.
+Ordinary calculations/navigation make no model call. Both tender views offer a separate explicit AI explanation using server-side app settings; a failed explanation does not change calculations or automatically retry.
 
-## Verification
+## Conflict and compatibility decisions
 
-Focused combined regression: **75 passed in 160.67 seconds**. This includes all four entry points, two activity choices, Back/Change activity, unsubmitted draft retention, separate workflow state, unchanged budgeting journeys, Agent 2 service checks and a complete synthetic tender calculation/export path. A model-client guard verifies that configured credentials do not cause a paid call during ordinary navigation or calculations.
+- Retain the combined activity menu. The teammate's Agent-2-only landing page suits its branch but would hide budgeting/proposal review in the shared app.
+- Retain the shared evidence loader, saved canonical role names, private snapshot selection and original synthetic population. Do not remap Admin Executive decisions or manufacture new global benchmark records from other roles. Extra tender-review titles remain selectable without a promised benchmark.
+- Keep explicit synthetic labels on the teammate's expanded historical demonstration. These examples are not validated market data.
+- Preserve missing-year checks for each role, separate headcount/FTE, known quantities with missing rates and the rule that source text cannot override a fractional-headcount blocker. Do not fill omissions with zero or silently convert shared allocations to FTE.
+- Prepared-source calendar years remain unknown. New synthetic year filters do not become real calendar evidence, and hard-coded demo aliases cannot override the prepared source's reviewed mapping.
+- Compare historical aggregates only where evidence supports them. The teammate's 80% comparable-cost threshold is a prototype review convention, not an award or market-validity rule.
+- Keep input registration and separate workflow state across activity changes. Saving, accepting AI changes, confirming inputs and approving a final budget remain distinct.
 
-The full combined regression passed **295 tests in 297.81 seconds**. A final **35 affected checks passed in 53.94 seconds** after the restored-input reset and checkbox-retention checks. Browser observations and preservation audit are recorded in VALIDATION.md and the latest HANDOVER.md entry. Earlier validation entries describe prior releases and should not be confused with a complete operational integration claim.
+## Packaging and privacy
 
-## Carried limitations and next work
+The complete publishable set includes UI/service modules, tests, contracts, dependency manifests, lockfile, runtime assets and three authored proposal templates. A clean installation uses labelled synthetic references and example loaders without the owner's private sources/database.
 
-1. Track 3's existing row adapter loses component adjustments, PWM detail and important document identity/approval metadata. It uses its own float totals and title-based grouping. Unit interpretation, supplied-total reconciliation and baseline fingerprints need correction before trusted live-budget transfer. This increment discloses the limitation rather than adding a lossy handoff.
-2. Track 4 is primarily historical benchmarking. Its hard-coded wage-index/scenario treatment, insufficient-evidence aggregate behaviour, dataset fingerprinting and policy-source verification still need the integration-assessment fixes. Its existing calculation services are preserved for the demonstration, not endorsed as operational market rules.
-3. Track 2 still needs separation of original arithmetic discrepancies from intentional revised-cost variance. Worksheet selection, secondary editor fields and reuse of the cleaner annual-increase control are follow-up work.
-4. No Track 5 maintenance workflow is implemented. Candidate records need source review, intended-use approval, versioning and rollback before they become benchmark evidence. Uploading any proposal/submission does not publish it as historical evidence.
-5. The v2 workbook is not imported or activated. Preserve source values, synthetic fills, unknown award status and synthetic calendar dates during its separate validation. Do not manufacture metadata to satisfy current schemas.
-6. XLSX works in the current development environment. Older XLS requires an additional reader; the optional Node template builder also needs its external package. No new dependency installation or production hosting validation is claimed.
-7. Browser-session drafts are not durable server saves for tender comparisons. Their existing JSON project download/resume remains the persistence mechanism. Raw tender-file immutability and owned revision storage remain future handoff work.
+Private workbooks/raw records, activation pointers, saved projects, uploads, credentials, evidence outputs and personal handoffs stay local. Exact private quotations and saved-project identifiers were removed from shareable methodology notes; original local evidence was preserved before editing. Source import/cleaning is separate, v3 remains the local active source, and v2 is not activated.
 
-The next integration increment should agree approval authority and Track 4 scope, add a lossless versioned cost-document adapter and frozen baseline snapshots, and establish one versioned submission interpretation for both tender views. Shared-data activation remains a separately approved step.
+See [README](../README.md), [setup/deployment](../DEPLOYMENT.md), [reference provisioning](PREPARED_REFERENCES.md) and [validation](VALIDATION.md).
+
+## Remaining limits
+
+Trusted live-budget transfer and authenticated approval handoff are incomplete. Track 4 primarily compares against historical references; dedicated like-for-like cross-tenderer comparison and Track 5 maintenance remain incomplete. Agent 2 uses project JSON download/resume, rather than Agent 1's owned revision store.
+
+The historical demonstration's wage-index/scenario constants and policy-source claims are retained prototype logic, not newly verified economic/legal guidance. Prepared-source operational comparability, actual pricing years and award outcomes remain qualified.
+
+Only Deployment loading has an isolated 26.01s to 1.67s improvement. Other step-switching lag is unresolved. Offline regression does not certify live-model quality, native Excel recalculation or real hosted PostgreSQL/OIDC operation. No paid calls or hosted deployment are part of consolidation.
