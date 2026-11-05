@@ -9,16 +9,18 @@ from pydantic import Field
 from services.models import StrictModel
 
 LABEL = "SYNTHETIC DATA — demonstration only; not real tenders or market evidence"
+PRIVATE_PROPOSAL_QUOTES_VERSION = 1
 ROLES = [
     "Facilities Manager",
     "Assistant Facilities Manager",
     "Property Officer",
-    "Administrative Assistant",
+    "Admin Executive",
     "Technician",
     "BMS Engineer",
     "Customer Service Officer",
     "Environmental Engineer",
 ]
+LEGACY_ROLES = list(ROLES)
 ALIASES = {
     "facility manager": "Facilities Manager",
     "facilities manager (fm)": "Facilities Manager",
@@ -26,16 +28,16 @@ ALIASES = {
     "afm": "Assistant Facilities Manager",
     "assistant fm": "Assistant Facilities Manager",
     "po": "Property Officer",
-    "admin executive": "Administrative Assistant",
-    "admin exec": "Administrative Assistant",
-    "admin assistant": "Administrative Assistant",
-    "administrative asst": "Administrative Assistant",
     "tech": "Technician",
     "m&e technician": "Technician",
 }
 
 
 def map_role(label: str) -> str | None:
+    from services.reference_data import active_snapshot, title_mapping
+
+    if active_snapshot() is not None:
+        return title_mapping(label)
     # Never conflate Events Manager or M&E Engineer with unrelated titles.
     return next(
         (r for r in ROLES if r.casefold() == label.strip().casefold()), ALIASES.get(label.strip().casefold())
@@ -69,41 +71,19 @@ class EvidenceRow(StrictModel):
 
 
 def load_records() -> list[dict]:
+    from services.reference_data import active_snapshot
+
+    snapshot = active_snapshot()
+    if snapshot is not None:
+        ROLES[:] = [r["Role Title"] for r in snapshot["standard_roles"]]
+        return snapshot["records"]
+    ROLES[:] = LEGACY_ROLES
+    return legacy_records()
+
+
+def legacy_records():
     path = Path(__file__).resolve().parents[1] / "data/sample/historical.json"
-    records = json.loads(path.read_text())
-    # Administrative Assistant is the canonical comparison role. Historical
-    # schedules used the equivalent title "Admin Executive"; retain the raw
-    # submitted title while normalising its verified comparison category.
-    for record in records:
-        if record.get("standard_role") == "Admin Executive":
-            record["standard_role"] = "Administrative Assistant"
-    # Keep Track 3 and Track 4 role coverage aligned for the demonstration
-    # database. These are labelled derived fixture records, not market data.
-    derived_roles = {
-        "Senior Facilities Manager": ("Facilities Manager", 1.35),
-        "BMS/BOS Officer": ("BMS Engineer", 0.90),
-        "Cleaning Supervisor": ("Customer Service Officer", 1.05),
-        "Helpdesk Officer": ("Customer Service Officer", 0.95),
-        "M&E Engineer": ("Environmental Engineer", 1.00),
-        "Property Executive": ("Property Officer", 1.05),
-        "Security Supervisor": ("Customer Service Officer", 1.15),
-    }
-    derived = []
-    for role, (source_role, multiplier) in derived_roles.items():
-        for record in records:
-            if record.get("standard_role") != source_role:
-                continue
-            clone = dict(record)
-            slug = role.casefold().replace("&", "and").replace("/", "-").replace(" ", "-")
-            clone["record_id"] = f"{record['record_id']}-{slug}"
-            clone["raw_role_name"] = role
-            clone["standard_role"] = role
-            clone["unit_rate_monthly"] = round(float(record["unit_rate_monthly"]) * multiplier, 2)
-            clone["data_origin"] = "derived synthetic demonstration fixture"
-            clone["source"] = f"Derived demonstration comparator for {role}"
-            derived.append(clone)
-    records.extend(derived)
-    return [EvidenceRow.model_validate(r).model_dump() for r in records]
+    return [EvidenceRow.model_validate(r).model_dump() for r in json.loads(path.read_text())]
 
 
 def quantile(values, p):
@@ -129,6 +109,10 @@ def stats(values: list[float], sample_count: int | None = None) -> dict:
 
 
 def comparable(rows, role, status="awarded", scope=None):
+    from services.reference_data import eligible, prepared
+
+    if prepared(rows):
+        return eligible(rows, role, "rate", scope) if role and role.strip() else []
     if status not in ("submitted", "awarded", "both"):
         raise ValueError("Unknown submitted/awarded filter")
     return [
@@ -144,7 +128,11 @@ def comparable(rows, role, status="awarded", scope=None):
     ]
 
 
-def rate_benchmark(rows, role, year=None, status="awarded", scope=None):
+def rate_benchmark(rows, role, year=None, status="awarded", scope=None, quantity_unit=None):
+    from services.reference_data import prepared, rate_reference
+
+    if prepared(rows):
+        return rate_reference(rows, role, year, status, scope, quantity_unit=quantity_unit)
     cohort = comparable(rows, role, status, scope)
     if year is not None:
         cohort = [r for r in cohort if r["pricing_year"] == year]
@@ -195,6 +183,10 @@ def position(value, benchmark):
 
 
 def quantity_benchmark(rows, role, year=None, status="awarded", scope=None):
+    from services.reference_data import prepared, quantity_reference
+
+    if prepared(rows):
+        return quantity_reference(rows, role, year, status, scope)
     reference = rate_benchmark(rows, role, year, status, scope)
     fields = [
         "record_id",
@@ -220,6 +212,11 @@ def quantity_benchmark(rows, role, year=None, status="awarded", scope=None):
 
 
 def escalation_benchmark(rows, role, status="awarded", scope=None):
+    from services.reference_data import annual_reference, prepared
+
+    if prepared(rows):
+        # A role-specific lookup must not silently become the general cohort.
+        return annual_reference(rows, role or "", status, scope)
     groups = {}
     for r in comparable(rows, role, status, scope):
         groups.setdefault(r["schedule_id"], []).append(r)
@@ -290,8 +287,33 @@ def escalation_benchmark(rows, role, status="awarded", scope=None):
 
 
 def quoted_schedule(rows, schedule_id, role, calendar_years):
+    from services.reference_data import prepared
+
+    if prepared(rows):
+        # Calendar dates in the prepared workbook are synthetic. Retained legacy
+        # quotes remain available only by their explicit historical schedule ID.
+        prior = [r for r in legacy_records() if r["schedule_id"] == schedule_id]
+        if prior:
+            return quoted_schedule(prior, schedule_id, role, calendar_years)
+        rows = [r for r in rows if r.get("data_origin") == "private officer proposal"]
     cohort = comparable(rows, role, "both")
     cohort = [r for r in cohort if r["schedule_id"] == schedule_id]
+    # A private, officer-confirmed proposal quote may price its own review only.
+    # Its status deliberately excludes it from historical comparability/statistics.
+    private = [
+        r
+        for r in rows
+        if r.get("schedule_id") == schedule_id
+        and r.get("standard_role") == role
+        and r.get("data_origin") == "private officer proposal"
+        and r.get("validation_status") == "proposal quotation"
+        and r.get("currency") == "SGD"
+        and r.get("rate_basis") == "inclusive monthly per head"
+    ]
+    if private:
+        if cohort:
+            raise ValueError("Private quote identifiers must not collide with historical references")
+        cohort = private
     if len({r["scope"] for r in cohort}) != 1:
         raise ValueError("Quoted schedule must have a consistent scope")
     result = []

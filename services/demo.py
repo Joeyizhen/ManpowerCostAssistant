@@ -4,12 +4,16 @@ from datetime import date
 
 from services.models import Coverage, Plan, Profile, Responsibility, Role
 
+DEMO_VERSION = 2
+
 
 def demo_plan():
     plan = Plan(
+        contract_kind="existing contract",
+        current_deployment_status="known",
         profile=Profile(
-            name="Synthetic civic venue",
-            description="Invented public venue with two buildings, events and tenant enquiries.",
+            name="Synthetic existing civic venue",
+            description="Invented renewal of an existing public venue with two buildings, events and tenant enquiries. Compare six current staff with seven proposed staff.",
             start=date(2024, 1, 1),
             base_years=4,
             option_years=2,
@@ -20,7 +24,7 @@ def demo_plan():
             response_requirements="Officer assumption: technical on-site coverage at one simultaneous post",
             assets="Officer assumption: BMS present, chiller absent; other asset details unknown",
             exclusions="GST, specialist maintenance, security contract, cleaning, supplies and event delivery staff",
-        )
+        ),
     )
     plan.responsibilities = [
         Responsibility(
@@ -49,6 +53,8 @@ def demo_plan():
             experience="Officer requirement: 5 years relevant experience",
             qualifications="Officer requirement: FM qualification",
             quantity=1,
+            current_quantity=1,
+            quantity_unit="headcount",
             quantity_reason="Officer-selected one-person scenario for oversight; workload rule unavailable",
             rate=8000,
             rate_reason="Synthetic comparable quote selection, inclusive manpower only",
@@ -66,6 +72,8 @@ def demo_plan():
             experience="Officer requirement: 3 years technical response",
             qualifications="Officer requirement: relevant technical qualification",
             quantity=5,
+            current_quantity=4,
+            quantity_unit="headcount",
             quantity_basis="coverage",
             coverage=Coverage(
                 hours_per_day=24,
@@ -76,7 +84,7 @@ def demo_plan():
                 relief_factor=1.15,
                 round_to_personnel=True,
             ),
-            quantity_reason="Officer-confirmed illustrative 44 gross hours and 1.15 relief factor; round to dedicated personnel",
+            quantity_reason="Illustrative increase from four current staff to five proposed staff, using 44 gross hours and a 1.15 relief factor rounded to dedicated personnel; officer review required",
             rate=3900,
             rate_reason="Synthetic comparable quote selection; components unavailable",
             rate_origin="Synthetic benchmark selection",
@@ -92,6 +100,8 @@ def demo_plan():
             experience="Officer requirement: event coordination experience",
             qualifications="Officer requirement: relevant coordination experience",
             quantity=1,
+            current_quantity=1,
+            quantity_unit="headcount",
             quantity_reason="Officer-selected scenario; no validated event workload rule",
             rate=5000,
             rate_reason="Invented officer rate assumption; no internal match or external research",

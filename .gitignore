@@ -59,3 +59,13 @@ build/
 /data/*
 !/data/sample/
 !/data/reference/
+
+# Authored proposal templates contain labelled example inputs, never source data.
+!/data/templates/
+/data/templates/*
+!/data/templates/track2-blank-template.xlsx
+!/data/templates/track2-example-proposal.xlsx
+!/data/templates/track2-preplanned-budget-sample.xlsx
+
+# Personal handoffs stay local; docs/HANDOVER.md is the shareable checkpoint.
+/docs/HANDOVER_*.md

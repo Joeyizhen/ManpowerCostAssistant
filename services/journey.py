@@ -80,6 +80,8 @@ def journey_context(plan, stage):
         ],
         "conversation_notes": plan.working_notes.get("notes", []),
         "review_checkpoint": plan.review_checkpoint,
+        "recorded_decision_bases": [b.model_dump(mode="json") for b in plan.decision_bases],
+        "unconfirmed_basis_drafts": plan.basis_drafts,
         "requirements_missing": missing_for_gate(draft, "profile")
         + missing_for_gate(draft, "responsibilities"),
     }
@@ -177,20 +179,6 @@ def prepare_review(plan, checkpoint, records):
             "missing_inputs": list(dict.fromkeys(errors)),
             "action": "Keep gathering relevant answers; do not present a proposal yet",
         }
-    # Operational readiness includes unmapped duties and duplicated externally covered duties.
-    if checkpoint == "manpower":
-        covered = {rid for r in draft.roles if r.included for rid in r.responsibility_ids}
-        gaps = [d.description for d in draft.responsibilities if d.coverage == "plan" and d.id not in covered]
-        duplicates = [
-            d.description for d in draft.responsibilities if d.coverage == "external" and d.id in covered
-        ]
-        if gaps or duplicates:
-            return {
-                "ready": False,
-                "missing_coverage": gaps,
-                "duplicated_external_coverage": duplicates,
-                "action": "Clarify/revise material coverage before presenting the manpower plan",
-            }
     if checkpoint in ("rates", "escalation"):
         from services.calculations import budget, preliminary
 
@@ -220,8 +208,18 @@ def prepare_review(plan, checkpoint, records):
             f.model_dump()
             for f in findings(draft, records)
             if checkpoint != "manpower"
-            or f.code.startswith(("unknown_", "coverage", "duplicate_", "undercoverage"))
-            or f.code in {"synthetic", "scenario", "unmatched", "mapping", "relief", "roster", "requirements"}
+            or f.code.startswith(("unknown_", "coverage", "duplicate_", "undercoverage", "provider_"))
+            or f.code
+            in {
+                "synthetic",
+                "scenario",
+                "unmatched",
+                "mapping",
+                "relief",
+                "roster",
+                "requirements",
+                "role_scope",
+            }
         ]
         if checkpoint != "requirements"
         else [],
@@ -264,3 +262,19 @@ def accept_review(plan, officer, records):
         )
     plan.__dict__.update(candidate.__dict__)
     return {"requirements": 2, "manpower": 4, "rates": 6, "escalation": 7, "validation": 8}[checkpoint]
+
+
+def record_draft_decision(plan, finding_id, status, justification, officer, records, treatment=""):
+    """Review advice against the exact draft without applying or approving its suggestions."""
+    candidate = plan.model_copy(deep=True)
+    current = {f.id: f for f in findings(working_draft(candidate), records)}
+    if finding_id not in current:
+        raise ValueError("Refresh the sanity checks after changing the plan")
+    prior_version = candidate.version
+    record_decision(candidate, current[finding_id], status, justification, officer, treatment)
+    if candidate.working_notes.get("base_version") == prior_version:
+        candidate.working_notes["base_version"] = candidate.version
+    for suggestion in candidate.pending:
+        if suggestion["base_version"] == prior_version:
+            suggestion["base_version"] = candidate.version
+    plan.__dict__.update(candidate.__dict__)

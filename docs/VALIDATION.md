@@ -1,17 +1,47 @@
-# Shareable validation record
+# Consolidation validation — 30 October 2026
 
-## Saved Track 1 checkpoint
+## Final combined checks
 
-On 17 October 2026 the saved checkpoint passed 94 automated tests, scoped Ruff and compilation. Tests cover current/proposed/zero/FTE quantities, editor deltas, explicit copy/mark-zero, save/resume, conservative mapping, mocked review/retry, rate assumptions, escalation, approval invalidation, storage isolation, full-cost arithmetic, charts and Excel formulas/cached values. Automated checks do not establish real conversational reliability.
+The publishable app was exported from the reviewed Git index (161 files), without private source workbooks, saved projects, uploads, secrets, reference activation pointers or personal handoffs. The clean package used a separate environment with fresh frozen-lockfile downloads on Windows / Python 3.14.2. External network/model connections were blocked during tests; Streamlit's internal localhost connections remained available.
 
-A zero-call replay of a preserved complete synthetic development conversation reconciled SGD 1,985,025.48, annual/base/option totals, supported retrieval, waterfall, sensitivity, nine-sheet Excel and two native charts. The earlier prefilled demo remains a separate invented scenario. Private traces/output workbooks are not committed; their original usage counters are retained locally.
+| Check | Result |
+|---|---|
+| Full offline regression on final clean-package code | **402 passed, 3 skipped in 270.97s (0:04:30)** |
+| Focused verification of the final pricing/fixture fixes | 22 passed, 1 skipped in 30.14s |
+| Earlier combined-agent/reference integration checks | 71 passed in 47.45s |
+| Fresh locked dependency installation | 68 packages; imports and installed-package compatibility passed |
+| Runtime requirements versus frozen lock export | Exact match, ignoring generated comments |
+| Isolated clean-package Streamlit startup | Health endpoint HTTP 200; model configuration disabled |
+| Lint, Python compilation and Git whitespace | Passed |
+| Complete staged privacy audit | 161 indexed files, 23 exclusion probes, zero findings |
 
-Historical live development runs were bounded and are not a frozen held-out score. No new live API test was run for the zero/current-deployment increment or this collaboration preparation. Revised prompt/schema behaviour still needs bounded live evaluation later. Original limits remain six requests/twelve tools per turn, 3,500 output tokens per response, 90-second timeout and no automatic retries; runner-specific ceilings remain unchanged. Human/held-out scores are unassigned.
+The three intentional skips require private local officer snapshots. Those files do not belong in a shareable checkout. Synthetic and invented prepared-workbook tests cover the public route without substituting private records.
 
-## Collaboration verification
+## Behaviour exercised
 
-Final collaboration run: **105 tests passed in 36.10 seconds**. Scoped Ruff and compilation passed. The original Track 1 suite remained intact; new contract/schema/privacy tests passed. Development/live-hybrid runners were exercised only in zero-call dry-run mode. The preserved complete-budget replay again reconciled its unchanged totals and workbooks without API calls. The staged audit scanned 65 files and verified 23 exclusion probes with no findings; it did not print secret values.
+- Both activities and all four workflow entrypoints, Back/Change activity, separate draft state and ordinary calculation without model calls.
+- Track 1's five visible screens, missing/zero quantities, retained rates, illustrative allowances, general/PWM separation, confirmation invalidation and unchanged-confirmation navigation.
+- Upload-first proposal intake, authored templates, original/revised figures, shared review controls, material input gaps, save/reopen and exports.
+- Agent 2 flat/composition workbook parsing, contract-year completeness, headcount/FTE checks, role matching/confirmation, insufficient evidence, deterministic comparison and workbook/project download/resume.
+- Active prepared-role choices versus synthetic fallback categories, unchanged shared synthetic population and source boundaries. Changed tender role matches require fresh confirmation.
+- Versioned integration contracts and synthetic handoff reconciliation. Schema validity remains separate from authenticated human approval.
 
-Run the tests and staged-file audit documented in the README. New tests validate synthetic fixture/schema freshness, cross-field amount/reference/unit/period checks, distinct approval/submission states and privacy-audit rules. The integration example is regenerated solely from the existing invented demo and Python calculator, without keys/database access. It does not confirm a real budget or implement Agent 2 comparisons.
+The initial full run found a stale synthetic description and repeated individual reason editors after applying a shared pricing basis. The labelled fixture description was refreshed without changing totals or schemas. The UI now hides redundant editors while retaining stored reasons/drafts; confirmation and invalidation services remain authoritative. Both fixes passed focused checks before this final full run.
 
-Final local run results are recorded with the collaboration baseline preparation. No hosted service, real tender evidence, native Excel recalculation or multi-user hosted deployment is established by these checks. Remaining product/UI limitations are listed in [HANDOVER.md](HANDOVER.md).
+## Preservation and privacy
+
+A verified local recovery checkpoint preserved tracked/untracked working files, useful private runtime/evidence files, a consistent saved-project database snapshot and Git history before integration. Existing saved project/revision rows, private configuration and reference files were compared read-only. Additional saves in the live session were retained, rather than rolled back. The running user app was not restarted.
+
+The staged audit scans exact indexed blobs and checks private exclusions, secret/private-path patterns, synthetic provenance and authored workbook structure. Manual review removed private source quotations and saved identifiers from shareable methodology notes. Private originals, logs and preservation reports remain under ignored local storage.
+
+The current local v3 reference activation remains unchanged. The separately authored synthetic integration fixture was regenerated only to match its current demo description. No source workbook cleaning/import, reference population regeneration or v2 activation was performed.
+
+## Practical limits
+
+Offline/mocked tests do not establish live assistant reasoning, real-world market validity or current policy applicability. The historical demo's wage/scenario constants are retained prototype logic, not newly verified legal/economic guidance. No paid model evaluation was run.
+
+No hosted deployment, real PostgreSQL/OIDC acceptance, Docker build or native Excel recalculation is claimed. Other declared Python versions and operating systems remain unverified. Trusted live-budget transfer, authenticated approval handoff, dedicated cross-tenderer comparison and Track 5 are incomplete.
+
+Only Deployment has an isolated before/after profile: 26.01s to 1.67s. General step-switching lag remains unresolved and is not certified by regression tests. Publication readiness is separate from operational deployment acceptance.
+
+See [the consolidation report](SPRINT2_INTEGRATION.md), [setup/deployment](../DEPLOYMENT.md) and [reference provisioning](PREPARED_REFERENCES.md). Detailed historical test logs and personal handoffs are local evidence; they are not deployment assets.

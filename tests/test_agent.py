@@ -117,7 +117,7 @@ def test_followup_context_retains_unconfirmed_facts_and_replaces_old_summary():
     assert p.profile.start is None  # unconfirmed answers remain suggestions
     assert journey_context(p, "Profile")["working_profile"]["locations"] == "Two buildings"
     assert not journey_context(p, "Profile")["draft_missing_inputs"]  # Optional metadata is not a gate.
-    assert journey_context(p, "Profile")["requirements_missing"]  # Duties still need clarification.
+    assert not journey_context(p, "Profile")["requirements_missing"]  # Unrecorded duties are advisory.
     second = {
         **first,
         "critical_functions": "Technical response",

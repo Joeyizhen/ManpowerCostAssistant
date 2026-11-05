@@ -115,7 +115,7 @@
       "duties": "One technical response post covered continuously",
       "quantity": 5.0,
       "quantity_unit": "headcount",
-      "quantity_basis": "Officer-confirmed illustrative 44 gross hours and 1.15 relief factor; round to dedicated personnel",
+      "quantity_basis": "Illustrative increase from four current staff to five proposed staff, using 44 gross hours and a 1.15 relief factor rounded to dedicated personnel; officer review required",
       "monthly_rate": 3900.0,
       "rate_unit": "inclusive monthly per head",
       "source_rate_basis": "Inclusive monthly tender charge per full-time person; not employee salary",
@@ -301,7 +301,7 @@
     },
     {
       "assumption_id": "deployment-tech",
-      "description": "SYNTHETIC: Officer-confirmed illustrative 44 gross hours and 1.15 relief factor; round to dedicated personnel"
+      "description": "SYNTHETIC: Illustrative increase from four current staff to five proposed staff, using 44 gross hours and a 1.15 relief factor rounded to dedicated personnel; officer review required"
     },
     {
       "assumption_id": "future-tech",

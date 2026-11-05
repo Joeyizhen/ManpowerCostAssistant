@@ -8,12 +8,14 @@ import re
 from dataclasses import dataclass
 from datetime import date
 from io import BytesIO
+from math import isfinite
 from pathlib import Path
 
 import pandas as pd
 import xlsxwriter
 
 from services.evidence import ROLES, load_records, map_role, position, rate_benchmark
+from services.integration_contracts import BudgetDocument
 
 TRACK3_COMPARISON_ROLES = ROLES + [
     "Senior Facilities Manager",
@@ -23,8 +25,8 @@ TRACK3_COMPARISON_ROLES = ROLES + [
     "M&E Engineer",
     "Property Executive",
     "Security Supervisor",
+    "Administrative Assistant",
 ]
-from services.integration_contracts import BudgetDocument
 
 REQUIRED_COLUMNS = ["Role", "Contract Year", "Quantity", "Quantity Unit", "Monthly Rate (SGD)", "Source"]
 OPTIONAL_TENDER_COLUMNS = [
@@ -87,10 +89,7 @@ def _is_monthly_rate_heading(value: str) -> bool:
 
 def _is_quantity_heading(value: str) -> bool:
     value = value.casefold().replace("\n", " ")
-    return any(
-        term in value
-        for term in ("quantity", "headcount", "no. of pax", "number of pax", "fte")
-    )
+    return any(term in value for term in ("quantity", "headcount", "no. of pax", "number of pax", "fte"))
 
 
 def _is_unit_heading(value: str) -> bool:
@@ -101,9 +100,7 @@ def _contract_year_from_sheet(sheet: str, preview: pd.DataFrame) -> int | None:
     """Read the contract year from a worksheet name or its title rows."""
     candidates = [sheet]
     candidates.extend(
-        str(value)
-        for value in preview.to_numpy().ravel()
-        if pd.notna(value) and str(value).strip()
+        str(value) for value in preview.to_numpy().ravel() if pd.notna(value) and str(value).strip()
     )
     for candidate in candidates:
         match = _YEAR_PATTERN.search(candidate)
@@ -141,9 +138,7 @@ def _parse_composition_rate_sheet(
     if subheader_row is None:
         return None
     rate_columns = [
-        col
-        for col, value in enumerate(normalised.iloc[subheader_row])
-        if _is_monthly_rate_heading(value)
+        col for col, value in enumerate(normalised.iloc[subheader_row]) if _is_monthly_rate_heading(value)
     ]
     if not rate_columns:
         return None
@@ -186,7 +181,11 @@ def _parse_composition_rate_sheet(
         site = ""
         for row in range(description_row, subheader_row + 1):
             candidate = preview.iat[row, rate_col] if rate_col < preview.shape[1] else None
-            if pd.notna(candidate) and str(candidate).strip() and "unit rate" not in str(candidate).casefold():
+            if (
+                pd.notna(candidate)
+                and str(candidate).strip()
+                and "unit rate" not in str(candidate).casefold()
+            ):
                 site = str(candidate).strip().replace("\n", " ")
                 break
         blocks.append((rate_col, quantity_col, site or f"site block {len(blocks) + 1}"))
@@ -217,23 +216,31 @@ def _parse_composition_rate_sheet(
             continue
 
         deployments = []
+        supplied_quantities = []
         missing_rate_for_quantity = False
         for rate_col, quantity_col, site in blocks:
             rate = pd.to_numeric(preview.iat[row_index, rate_col], errors="coerce")
             quantity = pd.to_numeric(preview.iat[row_index, quantity_col], errors="coerce")
+            if pd.notna(quantity) and (not isfinite(float(quantity)) or float(quantity) < 0):
+                raise Track3InputError(
+                    f"{file_name}, sheet '{sheet}', row {row_index + 1}: invalid quantity in {site}."
+                )
+            if pd.isna(quantity) and pd.notna(rate):
+                raise Track3InputError(
+                    f"{file_name}, sheet '{sheet}', row {row_index + 1}: missing quantity in {site}; not treated as zero."
+                )
             if pd.notna(quantity) and float(quantity) > 0:
+                supplied_quantities.append(float(quantity))
                 if pd.isna(rate):
                     missing_rate_for_quantity = True
                 else:
                     deployments.append((float(rate), float(quantity), site))
         if not deployments and not missing_rate_for_quantity:
             continue
-        total_quantity = sum(quantity for _, quantity, _ in deployments)
+        total_quantity = sum(supplied_quantities)
         total_cost = sum(rate * quantity for rate, quantity, _ in deployments)
         monthly_rate = (
-            pd.NA
-            if missing_rate_for_quantity or total_quantity <= 0
-            else total_cost / total_quantity
+            pd.NA if missing_rate_for_quantity or total_quantity <= 0 else total_cost / total_quantity
         )
         sites = ", ".join(site for _, _, site in deployments)
         rows.append(
@@ -305,7 +312,10 @@ def analysis_input_fingerprint(
     relevant_project = {
         key: project.get(key) for key in ("duration", "base_years", "option_years", "start", "currency")
     }
+    from services.reference_data import metadata
+
     payload = {
+        "reference": metadata(),
         "project": relevant_project,
         "budget": _canonical_frame(budget),
         "tenderers": {name: _canonical_frame(tenderers[name]) for name in sorted(tenderers)},
@@ -592,9 +602,7 @@ def parse_upload(name: str, content: bytes) -> pd.DataFrame:
                     None,
                 )
                 if header_row is None:
-                    composition = _parse_composition_rate_sheet(
-                        preview, file_name=name, sheet=sheet
-                    )
+                    composition = _parse_composition_rate_sheet(preview, file_name=name, sheet=sheet)
                     if composition is not None:
                         schedules.append(composition)
                     continue
@@ -649,19 +657,20 @@ def validation_issues(frame: pd.DataFrame) -> pd.DataFrame:
         quantity_unit = str(row["Quantity Unit"]).strip().casefold()
         if not str(row["Role"]).strip() or str(row["Role"]) == "<NA>":
             issues.append({"Row": index + 1, "Field": "Role", "Issue": "Missing manpower role"})
-        if pd.isna(row["Contract Year"]) or row["Contract Year"] < 1:
+        if (
+            pd.isna(row["Contract Year"])
+            or not isfinite(float(row["Contract Year"]))
+            or row["Contract Year"] < 1
+            or not float(row["Contract Year"]).is_integer()
+        ):
             issues.append({"Row": index + 1, "Field": "Contract Year", "Issue": "Missing or invalid year"})
         if pd.isna(row["Quantity"]):
             issues.append(
                 {"Row": index + 1, "Field": "Quantity", "Issue": "Missing quantity; not treated as zero"}
             )
-        elif row["Quantity"] < 0:
+        elif not isfinite(float(row["Quantity"])) or row["Quantity"] < 0:
             issues.append({"Row": index + 1, "Field": "Quantity", "Issue": "Quantity cannot be negative"})
-        elif (
-            quantity_unit == "headcount"
-            and float(row["Quantity"]) != int(float(row["Quantity"]))
-            and "aggregated across" not in str(row.get("Source", "")).casefold()
-        ):
+        elif quantity_unit == "headcount" and float(row["Quantity"]) != int(float(row["Quantity"])):
             issues.append(
                 {
                     "Row": index + 1,
@@ -677,24 +686,30 @@ def validation_issues(frame: pd.DataFrame) -> pd.DataFrame:
                     "Issue": "Missing rate; not treated as zero",
                 }
             )
-        elif row["Monthly Rate (SGD)"] < 0:
+        elif not isfinite(float(row["Monthly Rate (SGD)"])) or row["Monthly Rate (SGD)"] < 0:
             issues.append(
                 {"Row": index + 1, "Field": "Monthly Rate (SGD)", "Issue": "Rate cannot be negative"}
             )
         if quantity_unit not in {"headcount", "fte"}:
             issues.append({"Row": index + 1, "Field": "Quantity Unit", "Issue": "Use headcount or FTE"})
-        if "Contract Duration (Years)" in frame and pd.isna(row["Contract Duration (Years)"]):
+        if "Contract Duration (Years)" in frame and (
+            pd.isna(row["Contract Duration (Years)"])
+            or not isfinite(float(row["Contract Duration (Years)"]))
+            or not float(row["Contract Duration (Years)"]).is_integer()
+            or not 1 <= float(row["Contract Duration (Years)"]) <= 20
+        ):
             issues.append(
                 {
                     "Row": index + 1,
                     "Field": "Contract Duration (Years)",
-                    "Issue": "Missing contract duration; confirm the period before calculation",
+                    "Issue": "Missing or invalid contract duration; enter 1–20 whole years before calculation",
                 }
             )
         if (
             "Quoted Pricing Year" in frame
             and "Additional Escalation Applied (%)" in frame
             and pd.notna(row["Quoted Pricing Year"])
+            and isfinite(float(row["Quoted Pricing Year"]))
             and int(row["Quoted Pricing Year"]) >= date.today().year
             and pd.notna(row["Additional Escalation Applied (%)"])
             and float(row["Additional Escalation Applied (%)"]) > 0
@@ -708,10 +723,20 @@ def validation_issues(frame: pd.DataFrame) -> pd.DataFrame:
             )
     if "Contract Duration (Years)" in frame:
         durations = pd.to_numeric(frame["Contract Duration (Years)"], errors="coerce").dropna()
-        if not durations.empty and durations.nunique() == 1:
+        if (
+            not durations.empty
+            and durations.nunique() == 1
+            and isfinite(float(durations.iloc[0]))
+            and float(durations.iloc[0]).is_integer()
+            and 1 <= float(durations.iloc[0]) <= 20
+        ):
             duration = int(durations.iloc[0])
             for role, group in frame.groupby("Role"):
-                years = set(pd.to_numeric(group["Contract Year"], errors="coerce").dropna().astype(int))
+                years = {
+                    int(y)
+                    for y in pd.to_numeric(group["Contract Year"], errors="coerce").dropna()
+                    if isfinite(float(y)) and float(y).is_integer()
+                }
                 missing = sorted(set(range(1, duration + 1)) - years)
                 if missing:
                     issues.append(
@@ -735,8 +760,7 @@ def validation_warnings(frame: pd.DataFrame) -> pd.DataFrame:
         quantity_unit = str(row.get("Quantity Unit", "")).strip().casefold()
         justification = str(row.get("Officer Justification", "")).strip()
         assumption_confirmed = (
-            str(row.get("Officer Assumption Confirmed", "")).strip().casefold()
-            in confirmed_values
+            str(row.get("Officer Assumption Confirmed", "")).strip().casefold() in confirmed_values
         )
         if pd.notna(rate) and float(rate) >= 15000 and justification:
             warnings.append(
@@ -781,6 +805,15 @@ def _role_key(value: str) -> str:
     return map_role(value) or value.strip()
 
 
+def comparison_roles() -> list[str]:
+    from services.reference_data import active_snapshot
+
+    snapshot = active_snapshot()
+    if snapshot is not None:
+        return [row["Role Title"] for row in snapshot["standard_roles"]]
+    return TRACK3_COMPARISON_ROLES
+
+
 def role_mapping_table(
     frames: dict[str, pd.DataFrame] | list[pd.DataFrame],
     *,
@@ -792,15 +825,16 @@ def role_mapping_table(
         labelled = {f"Source {index}": frame for index, frame in enumerate(frames, 1)}
     else:
         labelled = frames
-    available_roles = standard_roles or TRACK3_COMPARISON_ROLES
+    available_roles = comparison_roles() if standard_roles is None else standard_roles
     exact_roles = {role.casefold(): role for role in available_roles}
     approved_aliases = {key.casefold(): value for key, value in (aliases or {}).items()}
     rows = []
     for submitted_by, frame in labelled.items():
         for role in sorted({str(value).strip() for value in frame["Role"].dropna()}):
             suggestion = exact_roles.get(role.casefold()) or approved_aliases.get(role.casefold())
-            if suggestion is None and standard_roles is None:
-                suggestion = map_role(role)
+            if suggestion is None:
+                mapped = map_role(role)
+                suggestion = mapped if mapped in available_roles else None
             if suggestion and suggestion.casefold() == role.casefold():
                 reason = "Title already matches the standard role list"
             elif suggestion:
@@ -822,12 +856,10 @@ def role_mapping_table(
     return pd.DataFrame(rows)
 
 
-def role_mapping_options(
-    mapping: pd.DataFrame, standard_roles: list[str] | None = None
-) -> list[str]:
+def role_mapping_options(mapping: pd.DataFrame, standard_roles: list[str] | None = None) -> list[str]:
     """Offer reviewed standard roles without forcing unmatched titles into a wrong category."""
     submitted = set(mapping.get("Role title in submission", pd.Series(dtype="string")).astype(str))
-    return sorted(set(standard_roles or TRACK3_COMPARISON_ROLES) | submitted)
+    return sorted(set(comparison_roles() if standard_roles is None else standard_roles) | submitted)
 
 
 def _mapped_role(value: str, mappings: dict | None, document: str | None) -> str:
@@ -896,6 +928,23 @@ def comparability_issues(
                     }
                 )
         for role, group in frame.groupby("Standard Role"):
+            role_years = {int(value) for value in group["Contract Year"]}
+            if role_years != expected:
+                missing = sorted(expected - role_years)
+                extra = sorted(role_years - expected)
+                detail = []
+                if missing:
+                    detail.append("missing year(s) " + ", ".join(map(str, missing)))
+                if extra:
+                    detail.append("unexpected year(s) " + ", ".join(map(str, extra)))
+                issues.append(
+                    {
+                        "Document": document,
+                        "Category": "Contract-period coverage",
+                        "Role": role,
+                        "Issue": "; ".join(detail),
+                    }
+                )
             units = sorted(set(group["Quantity Unit"]))
             if len(units) > 1:
                 issues.append(
@@ -1027,7 +1076,13 @@ def compare_track3(
             b_cost = float(b["Annual Cost"].sum()) if not b.empty else 0.0
             t_cost = float(t["Annual Cost"].sum()) if not t.empty else 0.0
             cost_pct = (t_cost - b_cost) / b_cost if b_cost else None
-            benchmark = rate_benchmark(records, role, year=benchmark_year, status="both")
+            benchmark = rate_benchmark(
+                records,
+                role,
+                year=benchmark_year,
+                status="both",
+                quantity_unit=str(t_y1["Quantity Unit"].iloc[0]) if not t_y1.empty else None,
+            )
             benchmark_text = position(t_rate, benchmark) if t_rate is not None else "No submitted rate"
             role_rows.append(
                 {

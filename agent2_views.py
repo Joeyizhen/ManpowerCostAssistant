@@ -1,4 +1,4 @@
-"""Streamlit UI for Agent 2 Track 3."""
+"""Streamlit UI for Agent 2 budget comparison."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from activity_nav import reset_task_inputs, retained_key
 from services.agent import create_client
 from services.agent2.track3 import (
     REQUIRED_COLUMNS,
@@ -68,9 +69,9 @@ def _frame_json(frame: pd.DataFrame | None) -> str | None:
     return None if frame is None else frame.to_json(orient="table", index=False)
 
 
-def _generate_track3_ai_assessment(result) -> str | None:
+def _generate_track3_ai_assessment(result, configured=None) -> str | None:
     """Explain verified Track 3 calculations without changing or inventing values."""
-    configured = settings()
+    configured = configured or settings()
     if not configured.api_key or not configured.model:
         return None
     evidence = {
@@ -89,6 +90,7 @@ def _generate_track3_ai_assessment(result) -> str | None:
                 "officer must confirm. Mention tenderer and role names and use percentage differences where available."
             ),
             input=json.dumps(evidence, ensure_ascii=False),
+            max_output_tokens=1800,
             store=False,
         )
         text = response.output_text.strip()
@@ -112,9 +114,13 @@ def _save_project_bytes() -> bytes:
         "role_mappings": _frame_json(st.session_state.agent2_role_mappings),
         "role_mappings_confirmed": st.session_state.agent2_role_mappings_confirmed,
         "analysis_fingerprint": st.session_state.agent2_analysis_fingerprint,
-        "result": None if result is None else {
-            "overall": _frame_json(result.overall), "roles": _frame_json(result.roles),
-            "findings": _frame_json(result.findings), "questions": _frame_json(result.questions),
+        "result": None
+        if result is None
+        else {
+            "overall": _frame_json(result.overall),
+            "roles": _frame_json(result.roles),
+            "findings": _frame_json(result.findings),
+            "questions": _frame_json(result.questions),
         },
     }
     return json.dumps(payload, indent=2).encode("utf-8")
@@ -124,25 +130,36 @@ def _restore_project(content: bytes):
     from services.agent2.track3 import Track3Result
 
     payload = json.loads(content.decode("utf-8"))
+
     def read_frame(value):
         return None if value is None else pd.read_json(StringIO(value), orient="table")
 
     st.session_state.agent2_project = payload.get("project", {})
+    st.session_state.agent2_ai_assessment = None
     st.session_state.agent2_budget_source = payload.get("budget_source", "")
     st.session_state.agent2_budget_confirmed = payload.get("budget_confirmed", False)
     st.session_state.agent2_demo = payload.get("demo", False)
     st.session_state.agent2_limitations = payload.get("limitations", [])
     st.session_state.agent2_budget = read_frame(payload.get("budget"))
-    st.session_state.agent2_tenderers = {name: read_frame(value) for name, value in payload.get("tenderers", {}).items()}
+    st.session_state.agent2_tenderers = {
+        name: read_frame(value) for name, value in payload.get("tenderers", {}).items()
+    }
     st.session_state.agent2_role_mappings = read_frame(payload.get("role_mappings"))
     st.session_state.agent2_role_mappings_confirmed = payload.get("role_mappings_confirmed", False)
     st.session_state.agent2_analysis_fingerprint = payload.get("analysis_fingerprint")
     saved_result = payload.get("result")
-    st.session_state.agent2_result = None if saved_result is None else Track3Result(
-        overall=read_frame(saved_result["overall"]), roles=read_frame(saved_result["roles"]),
-        findings=read_frame(saved_result["findings"]), questions=read_frame(saved_result["questions"]),
+    st.session_state.agent2_result = (
+        None
+        if saved_result is None
+        else Track3Result(
+            overall=read_frame(saved_result["overall"]),
+            roles=read_frame(saved_result["roles"]),
+            findings=read_frame(saved_result["findings"]),
+            questions=read_frame(saved_result["questions"]),
+        )
     )
     st.session_state.agent2_step = min(5, max(1, int(payload.get("step", 1))))
+    reset_task_inputs(3)
 
 
 def _progress(step: int):
@@ -231,8 +248,12 @@ def _current_result():
             "✓ Within review threshold": "✓ Within the current ±10% threshold",
         }
     )
-    result.overall.loc[result.overall["Variance (%)"] > 0, "Assessment"] = "⚠ Above approved budget — review required"
-    result.overall.loc[result.overall["Variance (%)"] < 0, "Assessment"] = "⚠ Below budget — clarify assumptions"
+    result.overall.loc[result.overall["Variance (%)"] > 0, "Assessment"] = (
+        "⚠ Above approved budget — review required"
+    )
+    result.overall.loc[result.overall["Variance (%)"] < 0, "Assessment"] = (
+        "⚠ Below budget — clarify assumptions"
+    )
     result.overall.loc[result.overall["Variance (%)"] == 0, "Assessment"] = "✓ Matches approved budget"
     result.findings.rename(
         columns={
@@ -282,16 +303,14 @@ def _overall_style(frame: pd.DataFrame):
             css = "background-color: #E7F6EC; color: #176B3A; font-weight: 600"
         for column in ["Variance to Budget (SGD)", "Variance (%)", "Assessment"]:
             styles.loc[index, column] = css
-    return (
-        frame.style.format(
-            {
-                "Approved Budget (SGD)": "S$ {:,.2f}",
-                "Tendered Cost (SGD)": "S$ {:,.2f}",
-                "Variance to Budget (SGD)": "S$ {:,.2f}",
-                "Variance (%)": "{:.1%}",
-            }
-        ).apply(lambda _: styles, axis=None)
-    )
+    return frame.style.format(
+        {
+            "Approved Budget (SGD)": "S$ {:,.2f}",
+            "Tendered Cost (SGD)": "S$ {:,.2f}",
+            "Variance to Budget (SGD)": "S$ {:,.2f}",
+            "Variance (%)": "{:.1%}",
+        }
+    ).apply(lambda _: styles, axis=None)
 
 
 def _variance_style(frame: pd.DataFrame, columns: list[str]):
@@ -310,7 +329,11 @@ def _variance_style(frame: pd.DataFrame, columns: list[str]):
                 else "background-color: #E7F6EC; color: #176B3A; font-weight: 600"
             )
     formats = {
-        column: "{:+.1%}" if "(%)" in column else "{:+,.1f}" if column == "Quantity Variance" else "S$ {:+,.2f}"
+        column: "{:+.1%}"
+        if "(%)" in column
+        else "{:+,.1f}"
+        if column == "Quantity Variance"
+        else "S$ {:+,.2f}"
         for column in columns
     }
     return frame.style.format(formats, na_rep="—").apply(lambda _: styles, axis=None)
@@ -330,7 +353,8 @@ def _finding_style(frame: pd.DataFrame):
             if pd.notna(value):
                 styles.loc[index, column] = (
                     "background-color: #FDE8E8; color: #8A1C1C; font-weight: 600"
-                    if float(value) > 0 else "background-color: #FFF1D6; color: #7A4A00; font-weight: 600"
+                    if float(value) > 0
+                    else "background-color: #FFF1D6; color: #7A4A00; font-weight: 600"
                 )
     return frame.style.format(
         {
@@ -338,7 +362,8 @@ def _finding_style(frame: pd.DataFrame):
             "Cost Variance to Budget (%)": "{:+.1%}",
             "Tendered Cost (SGD)": "S$ {:,.2f}",
             "Approved Budget Value": "S$ {:,.2f}",
-        }, na_rep="—"
+        },
+        na_rep="—",
     ).apply(lambda _: styles, axis=None)
 
 
@@ -355,7 +380,9 @@ def _editor(label: str, frame: pd.DataFrame, key: str) -> pd.DataFrame:
             "Contract Year": st.column_config.NumberColumn(min_value=1, step=1, required=True),
             "Quantity": st.column_config.NumberColumn(min_value=0.0, step=0.5, required=True),
             "Quantity Unit": st.column_config.SelectboxColumn(options=["headcount", "fte"], required=True),
-            "Monthly Rate (SGD)": st.column_config.NumberColumn(min_value=0.0, format="S$ %.2f", required=True),
+            "Monthly Rate (SGD)": st.column_config.NumberColumn(
+                min_value=0.0, format="S$ %.2f", required=True
+            ),
             "Source": st.column_config.TextColumn(required=True),
         },
     )
@@ -367,7 +394,9 @@ def _editor(label: str, frame: pd.DataFrame, key: str) -> pd.DataFrame:
             st.info("Accepted unusual input(s) retained exactly as submitted. Review the notes below.")
             st.dataframe(warnings, hide_index=True, width="stretch")
     else:
-        st.warning(f"Resolve {len(issues)} missing or invalid value(s). Blank values are not treated as zero.")
+        st.warning(
+            f"Resolve {len(issues)} missing or invalid value(s). Blank values are not treated as zero."
+        )
         st.dataframe(issues, hide_index=True, width="stretch")
     return edited
 
@@ -403,17 +432,22 @@ def _render_upload_feedback(feedback: dict | None):
         st.dataframe(pd.DataFrame(feedback["rows"]), hide_index=True, width="stretch")
 
 
-def render_agent2_track3():
+def render_agent2_track3(cfg=None):
     _state()
-    st.caption("FM MANPOWER COST ASSISTANT · AGENT 2 · TRACK 3")
-    top, exit_col = st.columns([5, 1])
-    top.title("Compare tenderers against an approved budget")
-    if exit_col.button("Change track", width="stretch"):
-        st.session_state.selected_track = None
-        st.rerun()
+    st.title("Compare submissions against an approved budget")
+    from services.reference_data import active_snapshot
+
+    st.caption(
+        "Prepared conditional source quotations; calendar pricing years and award outcomes unknown."
+        if active_snapshot() is not None
+        else "Demonstration rate references are synthetic, not validated market evidence."
+    )
     st.write(
         "Compare manpower costs and deployment against your approved budget, identify key variances "
         "and generate clarification questions. You make the final evaluation decision."
+    )
+    st.info(
+        "Standalone comparison only. Live transfer from budgeting is unavailable. Budgets with PWM or separate component additions require separate verification; this view does not preserve those additions."
     )
     step = st.session_state.agent2_step
     _progress(step)
@@ -424,7 +458,7 @@ def render_agent2_track3():
         st.download_button(
             "Download project file to continue later",
             data=_save_project_bytes(),
-            file_name=f"{project_name}_Track3_Project.json",
+            file_name=f"{project_name}_Budget_Comparison.json",
             mime="application/json",
             help=(
                 "Downloads a private JSON project file to your computer. Nothing is uploaded or saved "
@@ -433,33 +467,72 @@ def render_agent2_track3():
         )
         st.caption(
             "This downloads your current work as a JSON file. Keep it securely, then use "
-            "‘Resume a saved Track 3 project’ to continue later."
+            "‘Resume a saved budget comparison project’ to continue later."
         )
 
     if step == 1:
         st.header("Create a tender review project")
         st.write("Start with the basic contract context. Only the project name is required.")
-        saved_project = st.file_uploader("Resume a saved Track 3 project", type=["json"], key="agent2_saved_project")
+        saved_project = st.file_uploader(
+            "Resume a saved budget comparison project", type=["json"], key="agent2_saved_project"
+        )
         if saved_project and st.button("Resume saved project"):
             try:
                 _restore_project(saved_project.getvalue())
                 st.success("Saved project restored. You can continue reviewing and amend earlier decisions.")
                 st.rerun()
             except Exception:
-                st.error("This file is not a valid saved Track 3 project.")
+                st.error("This file is not a valid saved budget comparison project.")
         project = st.session_state.agent2_project
-        with st.form("agent2_project_form"):
-            name = st.text_input("Project name *", value=project.get("name", ""), placeholder="e.g. Central Campus IFM Tender")
+        with st.container():
+            name = st.text_input(
+                "Project name *",
+                value=project.get("name", ""),
+                placeholder="e.g. Central Campus IFM Tender",
+                key=retained_key("navigation_agent2_views_376"),
+            )
             c1, c2 = st.columns(2)
             facility = c1.selectbox(
                 "Building / facility type",
-                ["Not specified", "Commercial", "Institutional", "Data Centre", "Healthcare", "Industrial", "Other"],
-                index=["Not specified", "Commercial", "Institutional", "Data Centre", "Healthcare", "Industrial", "Other"].index(project.get("facility_type", "Not specified")),
+                [
+                    "Not specified",
+                    "Commercial",
+                    "Institutional",
+                    "Data Centre",
+                    "Healthcare",
+                    "Industrial",
+                    "Other",
+                ],
+                index=[
+                    "Not specified",
+                    "Commercial",
+                    "Institutional",
+                    "Data Centre",
+                    "Healthcare",
+                    "Industrial",
+                    "Other",
+                ].index(project.get("facility_type", "Not specified")),
+                key=retained_key("navigation_agent2_views_378"),
             )
             service = c2.selectbox(
                 "FM service category",
-                ["Integrated Facilities Management", "Mechanical & Electrical Maintenance", "Cleaning Services", "Security Services", "Building Maintenance", "Other FM Services"],
-                index=["Integrated Facilities Management", "Mechanical & Electrical Maintenance", "Cleaning Services", "Security Services", "Building Maintenance", "Other FM Services"].index(project.get("service", "Integrated Facilities Management")),
+                [
+                    "Integrated Facilities Management",
+                    "Mechanical & Electrical Maintenance",
+                    "Cleaning Services",
+                    "Security Services",
+                    "Building Maintenance",
+                    "Other FM Services",
+                ],
+                index=[
+                    "Integrated Facilities Management",
+                    "Mechanical & Electrical Maintenance",
+                    "Cleaning Services",
+                    "Security Services",
+                    "Building Maintenance",
+                    "Other FM Services",
+                ].index(project.get("service", "Integrated Facilities Management")),
+                key=retained_key("navigation_agent2_views_383"),
             )
             c3, c4, c5, c6 = st.columns(4)
             base_years = c3.number_input(
@@ -467,6 +540,7 @@ def render_agent2_track3():
                 1,
                 20,
                 int(project.get("base_years", project.get("duration", 6))),
+                key=retained_key("navigation_agent2_views_389"),
             )
             option_years = c4.number_input(
                 "Option period (years, if any)",
@@ -474,11 +548,24 @@ def render_agent2_track3():
                 20,
                 int(project.get("option_years", 0)),
                 help="Enter 0 if the contract has no optional extension period.",
+                key=retained_key("navigation_agent2_views_395"),
             )
-            start = c5.date_input("Contract start date", value=date.fromisoformat(project.get("start", "2027-01-01")))
-            reference = c6.text_input("Tender reference number", value=project.get("reference", ""))
-            description = st.text_area("Project description (optional)", value=project.get("description", ""))
-            submitted = st.form_submit_button("Save project and continue", type="primary", width="stretch")
+            start = c5.date_input(
+                "Contract start date",
+                value=date.fromisoformat(project.get("start", "2027-01-01")),
+                key=retained_key("navigation_agent2_views_402"),
+            )
+            reference = c6.text_input(
+                "Tender reference number",
+                value=project.get("reference", ""),
+                key=retained_key("navigation_agent2_views_403"),
+            )
+            description = st.text_area(
+                "Project description (optional)",
+                value=project.get("description", ""),
+                key=retained_key("navigation_agent2_views_404"),
+            )
+            submitted = st.button("Save project and continue", type="primary", width="stretch")
         if submitted:
             if not name.strip():
                 st.error("Enter a project name before continuing.")
@@ -486,12 +573,16 @@ def render_agent2_track3():
                 st.error("The base and option periods together cannot exceed 20 years.")
             else:
                 st.session_state.agent2_project = {
-                    "name": name.strip(), "facility_type": facility, "service": service,
+                    "name": name.strip(),
+                    "facility_type": facility,
+                    "service": service,
                     "base_years": base_years,
                     "option_years": option_years,
                     "duration": base_years + option_years,
-                    "start": start.isoformat(), "reference": reference.strip(),
-                    "description": description.strip(), "currency": "SGD",
+                    "start": start.isoformat(),
+                    "reference": reference.strip(),
+                    "description": description.strip(),
+                    "currency": "SGD",
                 }
                 st.session_state.agent2_step = 2
                 st.rerun()
@@ -515,12 +606,20 @@ def render_agent2_track3():
             )
             st.session_state.agent2_budget_confirmed = True
             st.session_state.agent2_demo = True
+            reset_task_inputs(3)
             st.session_state.agent2_step = 3
             st.rerun()
 
         st.subheader("A. Approved manpower budget")
-        source = st.text_input("Budget source / reference", value=st.session_state.agent2_budget_source, placeholder="e.g. Management-approved FY2027 manpower budget")
-        budget_file = st.file_uploader("Upload approved manpower budget", type=["csv", "xlsx", "xls", "json"], key="agent2_budget_upload")
+        source = st.text_input(
+            "Budget source / reference",
+            value=st.session_state.agent2_budget_source,
+            placeholder="e.g. Management-approved FY2027 manpower budget",
+            key=retained_key("navigation_agent2_views_446"),
+        )
+        budget_file = st.file_uploader(
+            "Upload approved manpower budget", type=["csv", "xlsx", "xls", "json"], key="agent2_budget_upload"
+        )
         if budget_file and st.button("Read approved budget"):
             try:
                 extracted_budget = parse_upload(budget_file.name, budget_file.getvalue())
@@ -540,15 +639,18 @@ def render_agent2_track3():
                 "Approval reference *",
                 value=st.session_state.agent2_project.get("budget_approval_reference", ""),
                 placeholder="e.g. approval paper, email or system reference",
+                key=retained_key("navigation_agent2_views_459"),
             )
             revision = st.text_input(
                 "Budget revision *",
                 value=str(st.session_state.agent2_project.get("budget_revision", "")),
                 placeholder="e.g. Rev 2",
+                key=retained_key("navigation_agent2_views_464"),
             )
             confirmed = st.checkbox(
                 "I confirm this is the current approved manpower budget for this tender.",
                 value=st.session_state.agent2_budget_confirmed,
+                key=retained_key("navigation_agent2_views_469"),
             )
             st.session_state.agent2_budget_confirmed = confirmed
             st.session_state.agent2_project.update(
@@ -566,7 +668,7 @@ def render_agent2_track3():
         tenderer_name = st.text_input(
             "Tenderer name",
             placeholder="e.g. Tenderer A",
-            key=f"agent2_tender_name_{upload_version}",
+            key=retained_key(f"agent2_tender_name_{upload_version}"),
             disabled=uploaded_count >= MAX_TENDERERS,
         )
         tender_files = st.file_uploader(
@@ -591,7 +693,9 @@ def render_agent2_track3():
             else:
                 try:
                     if tenderer_name.strip() in st.session_state.agent2_tenderers:
-                        raise Track3InputError("A tenderer with this name already exists. Remove or rename it before uploading again.")
+                        raise Track3InputError(
+                            "A tenderer with this name already exists. Remove or rename it before uploading again."
+                        )
                     frames = [parse_upload(file.name, file.getvalue()) for file in tender_files]
                     extracted = pd.concat(frames, ignore_index=True)
                     feedback = _upload_feedback(
@@ -614,25 +718,39 @@ def render_agent2_track3():
                     details, action = st.columns([4, 1])
                     issue_count = len(validation_issues(uploaded_frame))
                     if issue_count:
-                        details.error(f"{uploaded_name}: Needs correction — {issue_count} validation issue(s).")
+                        details.error(
+                            f"{uploaded_name}: Needs correction — {issue_count} validation issue(s)."
+                        )
                     else:
                         details.success(f"{uploaded_name}: Ready for verification.")
-                    if action.button("Remove", key=f"remove_agent2_tenderer_{uploaded_name}", width="stretch"):
+                    if action.button(
+                        "Remove", key=f"remove_agent2_tenderer_{uploaded_name}", width="stretch"
+                    ):
                         remove_name = uploaded_name
             if remove_name is not None:
                 st.session_state.agent2_tenderers.pop(remove_name, None)
                 st.session_state.agent2_tender_upload_version += 1
                 st.rerun()
             if uploaded_count < MAX_TENDERERS:
-                st.info("Use the cleared form above to upload the next tenderer. You can compare up to five submissions.")
+                st.info(
+                    "Use the cleared form above to upload the next tenderer. You can compare up to five submissions."
+                )
             else:
                 st.info("Five tenderers have been added. Remove one before uploading a replacement.")
-        approval_ready = st.session_state.agent2_budget_confirmed and bool(
-            st.session_state.agent2_project.get("budget_approval_reference")
-        ) and bool(str(st.session_state.agent2_project.get("budget_revision", "")).strip())
-        ready = st.session_state.agent2_budget is not None and bool(st.session_state.agent2_tenderers) and approval_ready
+        approval_ready = (
+            st.session_state.agent2_budget_confirmed
+            and bool(st.session_state.agent2_project.get("budget_approval_reference"))
+            and bool(str(st.session_state.agent2_project.get("budget_revision", "")).strip())
+        )
+        ready = (
+            st.session_state.agent2_budget is not None
+            and bool(st.session_state.agent2_tenderers)
+            and approval_ready
+        )
         if not ready:
-            st.caption("Add one confirmed approved budget, its approval reference and revision, and at least one tenderer to continue.")
+            st.caption(
+                "Add one confirmed approved budget, its approval reference and revision, and at least one tenderer to continue."
+            )
         left, _, right = st.columns([1, 3, 1])
         if left.button("← Back", width="stretch"):
             st.session_state.agent2_step = 1
@@ -648,7 +766,9 @@ def render_agent2_track3():
             "below; missing or contradictory values are never guessed or treated as zero."
         )
         if st.session_state.agent2_demo:
-            st.warning("SYNTHETIC DEMONSTRATION DATA — not real tenders, market evidence or management approval.")
+            st.warning(
+                "SYNTHETIC DEMONSTRATION DATA — not real tenders, market evidence or management approval."
+            )
         validation_frames = []
         for document_name, document_frame in {
             "Approved budget": st.session_state.agent2_budget,
@@ -665,7 +785,9 @@ def render_agent2_track3():
             )
             st.dataframe(consolidated_issues, hide_index=True, width="stretch")
         else:
-            st.success("All uploaded documents passed input validation. You may confirm the role matches and compare.")
+            st.success(
+                "All uploaded documents passed input validation. You may confirm the role matches and compare."
+            )
         budget = _editor("Approved budget", st.session_state.agent2_budget, "agent2_budget_editor")
         st.session_state.agent2_budget = budget
         verified = validation_issues(budget).empty
@@ -706,8 +828,12 @@ def render_agent2_track3():
             width="stretch",
             key="agent2_role_mapping_editor",
             column_config={
-                "Submitted by": st.column_config.TextColumn(help="The approved budget or tenderer that used this title."),
-                "Role title in submission": st.column_config.TextColumn(help="The role title exactly as submitted."),
+                "Submitted by": st.column_config.TextColumn(
+                    help="The approved budget or tenderer that used this title."
+                ),
+                "Role title in submission": st.column_config.TextColumn(
+                    help="The role title exactly as submitted."
+                ),
                 "Compare as": st.column_config.SelectboxColumn(
                     "Role used for comparison",
                     options=role_mapping_options(mapping),
@@ -735,6 +861,7 @@ def render_agent2_track3():
             "I have checked the role matches and confirm they can be used for this comparison.",
             value=st.session_state.agent2_role_mappings_confirmed,
             disabled=not valid_matches,
+            key=retained_key("navigation_agent2_views_583"),
         )
         st.session_state.agent2_role_mappings_confirmed = mappings_confirmed
         mapping_dict = {
@@ -788,9 +915,8 @@ def render_agent2_track3():
                 st.session_state.agent2_analysis_fingerprint = analysis_input_fingerprint(
                     st.session_state.agent2_project, budget, tenderers, mapping
                 )
-                st.session_state.agent2_ai_assessment = _generate_track3_ai_assessment(
-                    st.session_state.agent2_result
-                )
+                # Calculation must never trigger a paid explanation automatically.
+                st.session_state.agent2_ai_assessment = None
                 st.session_state.agent2_step = 4
                 st.rerun()
             except Track3InputError as exc:
@@ -831,7 +957,8 @@ def render_agent2_track3():
         with overall_tab:
             st.dataframe(
                 _overall_style(result.overall),
-                hide_index=True, width="stretch",
+                hide_index=True,
+                width="stretch",
             )
             st.caption(
                 "🟢 Matches approved budget   ·   🔴 Above approved budget — review required   ·   "
@@ -840,7 +967,9 @@ def render_agent2_track3():
             budget_value = float(result.overall["Approved Budget (SGD)"].iloc[0])
             chart = result.overall.copy()
             chart["Comparison label"] = chart["Variance (%)"].map(
-                lambda value: f"{abs(value):.1%} {'above' if value > 0 else 'below' if value < 0 else 'at'} budget"
+                lambda value: (
+                    f"{abs(value):.1%} {'above' if value > 0 else 'below' if value < 0 else 'at'} budget"
+                )
             )
             chart["Colour"] = chart["Variance (%)"].map(
                 lambda value: "#C84A4A" if value > 0 else "#D28B21" if value < 0 else "#2E8B57"
@@ -908,35 +1037,41 @@ def render_agent2_track3():
             else:
                 st.success("No findings exceeded the current review thresholds.")
             st.markdown("#### AI overall assessment")
-            configured = settings()
+            configured = cfg or settings()
             if st.session_state.agent2_ai_assessment:
                 with st.container(border=True):
                     st.markdown(st.session_state.agent2_ai_assessment)
-                if st.button("Regenerate AI overall assessment", key="agent2_regenerate_ai"):
-                    with st.spinner("Reviewing the verified comparison results…"):
-                        st.session_state.agent2_ai_assessment = _generate_track3_ai_assessment(result)
-                    st.rerun()
-            elif configured.api_key and configured.model:
-                st.warning(
-                    "OpenAI is connected, but an assessment could not be generated. The verified calculations above remain available."
-                )
-                if st.button("Try AI assessment again", key="agent2_retry_ai"):
-                    with st.spinner("Reviewing the verified comparison results…"):
-                        st.session_state.agent2_ai_assessment = _generate_track3_ai_assessment(result)
-                    st.rerun()
+            if configured.api_key and configured.model:
+                if st.button("Explain these results with AI", key="agent2_explain_ai"):
+                    with st.spinner("Explaining the recorded comparison results…"):
+                        assessment = _generate_track3_ai_assessment(result, configured)
+                    st.session_state.agent2_ai_assessment = assessment
+                    if assessment:
+                        st.rerun()
+                    st.warning(
+                        "AI explanation was unavailable. Recorded calculations are unchanged; retry explicitly."
+                    )
             else:
-                st.caption(
-                    "Connect OpenAI to add a concise assessment of the verified overall and role-level differences."
-                )
+                st.caption("Configure both private model settings to request an optional AI explanation.")
+
         with role_tab:
-            selected = st.selectbox("Show tenderer", list(result.overall["Tenderer"]))
+            selected = st.selectbox(
+                "Show tenderer",
+                list(result.overall["Tenderer"]),
+                key=retained_key("navigation_agent2_views_739"),
+            )
             role_view = result.roles[result.roles["Tenderer"] == selected]
             st.dataframe(
                 _variance_style(
                     role_view,
-                    ["Quantity Variance", "Role Cost Variance to Budget (SGD)", "Role Cost Variance to Budget (%)"],
+                    [
+                        "Quantity Variance",
+                        "Role Cost Variance to Budget (SGD)",
+                        "Role Cost Variance to Budget (%)",
+                    ],
                 ),
-                hide_index=True, width="stretch",
+                hide_index=True,
+                width="stretch",
             )
             st.caption(
                 "🔴 Positive values exceed the approved budget or quantity · 🟠 Negative values are below it · "
@@ -952,7 +1087,13 @@ def render_agent2_track3():
             if result.findings.empty:
                 st.success("No findings require review.")
             else:
-                st.dataframe(_finding_style(result.findings.drop(columns=["Review Status", "Officer Comment"], errors="ignore")), hide_index=True, width="stretch")
+                st.dataframe(
+                    _finding_style(
+                        result.findings.drop(columns=["Review Status", "Officer Comment"], errors="ignore")
+                    ),
+                    hide_index=True,
+                    width="stretch",
+                )
                 st.markdown("##### Review findings and add notes")
                 st.caption(
                     "Choose whether each item still needs review, has been checked, or has been resolved. "
@@ -964,7 +1105,8 @@ def render_agent2_track3():
                 reviewed = st.data_editor(
                     review_input[["Tenderer", "Finding", "Decision", "Reviewer Notes"]],
                     key="agent2_findings_editor",
-                    width="stretch", hide_index=True,
+                    width="stretch",
+                    hide_index=True,
                     column_config={
                         "Decision": st.column_config.SelectboxColumn(
                             options=["Pending Review", "Reviewed", "Resolved"], required=True
@@ -1001,21 +1143,29 @@ def render_agent2_track3():
     else:
         result = _current_result()
         st.header("Export the tender review report")
-        st.write("The workbook contains the comparison, findings, tenderer-specific questions and limitations.")
+        st.write(
+            "The workbook contains the comparison, findings, tenderer-specific questions and limitations."
+        )
         limitations_text = st.text_area(
             "Limitations and accepted exceptions",
             value="\n".join(st.session_state.agent2_limitations),
             height=150,
             help="Include unresolved red flags that the final costing or evaluation did not address.",
+            key=retained_key("navigation_agent2_views_812"),
         )
         limitations = [line.strip() for line in limitations_text.splitlines() if line.strip()]
         st.session_state.agent2_limitations = limitations
-        pending = int((result.findings["Review Status"] == "Pending Review").sum()) if not result.findings.empty else 0
+        pending = (
+            int((result.findings["Review Status"] == "Pending Review").sum())
+            if not result.findings.empty
+            else 0
+        )
         acknowledged = True
         if pending:
             st.warning(f"{pending} finding(s) are still pending review.")
             acknowledged = st.checkbox(
-                "I acknowledge that pending findings remain and will not treat this report as an award recommendation."
+                "I acknowledge that pending findings remain and will not treat this report as an award recommendation.",
+                key=retained_key("navigation_agent2_views_824"),
             )
         mapping = st.session_state.agent2_role_mappings
         workbook = export_track3_excel(
@@ -1028,11 +1178,12 @@ def render_agent2_track3():
             thresholds={"Overall / role cost variance": 0.10, "Annual escalation": 0.08},
         )
         st.download_button(
-            "Download Track 3 Excel report",
+            "Download budget comparison Excel report",
             data=workbook,
-            file_name="Track_3_Tender_Review.xlsx",
+            file_name="Budget_Comparison.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            type="primary", width="stretch",
+            type="primary",
+            width="stretch",
             disabled=not acknowledged or bool(readiness and not readiness.analysis_is_current),
         )
         if acknowledged:

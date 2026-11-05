@@ -24,30 +24,43 @@ from services.agent2.track3 import (
 from services.evidence import ROLES, load_records, map_role, rate_benchmark
 
 
-def test_administrative_assistant_is_a_standard_comparison_role():
-    assert "Administrative Assistant" in ROLES
-    assert map_role("Administrative Assistant") == "Administrative Assistant"
-    assert map_role("Admin Assistant") == "Administrative Assistant"
-    assert map_role("Admin Executive") == "Administrative Assistant"
+def test_saved_admin_executive_category_is_not_remapped_by_tender_integration():
+    assert "Admin Executive" in ROLES
+    assert map_role("Admin Executive") == "Admin Executive"
+    mapping = role_mapping_table({"Tenderer": pd.DataFrame([{"Role": "Administrative Assistant"}])})
+    assert mapping.iloc[0]["Compare as"] == "Administrative Assistant"
 
 
 def test_track3_catalogue_covers_track4_building_roles():
     records = load_records()
     frame = pd.DataFrame(
-        [{"Role": role} for role in [
-            "Senior Facilities Manager", "BMS/BOS Officer", "Cleaning Supervisor",
-            "Helpdesk Officer", "M&E Engineer", "Property Executive", "Security Supervisor",
-        ]]
+        [
+            {"Role": role}
+            for role in [
+                "Senior Facilities Manager",
+                "BMS/BOS Officer",
+                "Cleaning Supervisor",
+                "Helpdesk Officer",
+                "M&E Engineer",
+                "Property Executive",
+                "Security Supervisor",
+            ]
+        ]
     )
     mapping = role_mapping_table({"Tenderer A": frame})
     for role in [
-        "Senior Facilities Manager", "BMS/BOS Officer", "Cleaning Supervisor",
-        "Helpdesk Officer", "M&E Engineer", "Property Executive", "Security Supervisor",
+        "Senior Facilities Manager",
+        "BMS/BOS Officer",
+        "Cleaning Supervisor",
+        "Helpdesk Officer",
+        "M&E Engineer",
+        "Property Executive",
+        "Security Supervisor",
     ]:
         row = mapping[mapping["Role title in submission"] == role].iloc[0]
         assert row["Compare as"] == role
         assert row["Why this is suggested"] == "Title already matches the standard role list"
-        assert rate_benchmark(records, role, year=2026)["available"]
+        assert not rate_benchmark(records, role, year=2026)["available"]
 
 
 def test_validation_warnings_accept_and_explain_unusual_inputs():
@@ -117,9 +130,14 @@ def test_review_readiness_is_deterministic_and_marks_changed_inputs_stale():
     fingerprint = analysis_input_fingerprint(project, budget, tenderers, mappings)
 
     current = review_readiness(
-        project, budget, tenderers, mappings,
-        budget_confirmed=True, mappings_confirmed=True,
-        result=result, analysed_fingerprint=fingerprint,
+        project,
+        budget,
+        tenderers,
+        mappings,
+        budget_confirmed=True,
+        mappings_confirmed=True,
+        result=result,
+        analysed_fingerprint=fingerprint,
     )
     assert current.analysis_is_current
     assert current.status == "review_in_progress"
@@ -128,9 +146,14 @@ def test_review_readiness_is_deterministic_and_marks_changed_inputs_stale():
     changed["Tenderer A"] = changed["Tenderer A"].copy()
     changed["Tenderer A"].loc[0, "Quantity"] += 1
     stale = review_readiness(
-        project, budget, changed, mappings,
-        budget_confirmed=True, mappings_confirmed=True,
-        result=result, analysed_fingerprint=fingerprint,
+        project,
+        budget,
+        changed,
+        mappings,
+        budget_confirmed=True,
+        mappings_confirmed=True,
+        result=result,
+        analysed_fingerprint=fingerprint,
     )
     assert stale.status == "stale"
     assert not stale.analysis_is_current
@@ -138,9 +161,14 @@ def test_review_readiness_is_deterministic_and_marks_changed_inputs_stale():
 
 def test_review_readiness_explains_missing_prerequisites():
     readiness = review_readiness(
-        {}, None, {}, None,
-        budget_confirmed=False, mappings_confirmed=False,
-        result=None, analysed_fingerprint=None,
+        {},
+        None,
+        {},
+        None,
+        budget_confirmed=False,
+        mappings_confirmed=False,
+        result=None,
+        analysed_fingerprint=None,
     )
     assert readiness.status == "checks_required"
     assert "Create the review project." in readiness.reasons
@@ -161,7 +189,16 @@ def test_synthetic_track3_compares_multiple_tenderers_and_flags_risks():
 
 def test_missing_values_are_flagged_and_not_changed_to_zero():
     frame = pd.DataFrame(
-        [{"Role": "Technician", "Contract Year": 1, "Quantity": None, "Quantity Unit": "headcount", "Monthly Rate (SGD)": None, "Source": "test.csv"}]
+        [
+            {
+                "Role": "Technician",
+                "Contract Year": 1,
+                "Quantity": None,
+                "Quantity Unit": "headcount",
+                "Monthly Rate (SGD)": None,
+                "Source": "test.csv",
+            }
+        ]
     )
     issues = validation_issues(frame)
     assert set(issues["Field"]) == {"Quantity", "Monthly Rate (SGD)"}
@@ -186,9 +223,13 @@ def test_contract_duration_coverage_and_double_escalation_are_flagged():
     incomplete = pd.DataFrame(
         [
             {
-                "Role": "Technician", "Contract Year": year, "Quantity": 5,
-                "Quantity Unit": "headcount", "Monthly Rate (SGD)": 4100,
-                "Source": "validation", "Contract Duration (Years)": 3,
+                "Role": "Technician",
+                "Contract Year": year,
+                "Quantity": 5,
+                "Quantity Unit": "headcount",
+                "Monthly Rate (SGD)": 4100,
+                "Source": "validation",
+                "Contract Duration (Years)": 3,
             }
             for year in (1, 2)
         ]
@@ -204,14 +245,28 @@ def test_contract_duration_coverage_and_double_escalation_are_flagged():
 def test_csv_upload_aliases_and_excel_export():
     content = b"Manpower Role,Year,Headcount,Monthly Rate (SGD)\nTechnician,1,4,4200\n"
     frame = parse_upload("Tenderer A.csv", content)
-    assert list(frame.columns) == ["Role", "Contract Year", "Quantity", "Quantity Unit", "Monthly Rate (SGD)", "Source"]
+    assert list(frame.columns) == [
+        "Role",
+        "Contract Year",
+        "Quantity",
+        "Quantity Unit",
+        "Monthly Rate (SGD)",
+        "Source",
+    ]
     assert frame.loc[0, "Role"] == "Technician"
 
     budget, _ = load_synthetic_budget()
     result = compare_track3(budget, synthetic_tenderers(budget))
     binary = export_track3_excel({"name": "Synthetic Track 3"}, result, ["Synthetic only"])
     workbook = load_workbook(BytesIO(binary), read_only=True, data_only=False)
-    assert {"Project Overview", "Overall Comparison", "Role Comparison", "Findings", "Clarification Questions", "Limitations"} <= set(workbook.sheetnames)
+    assert {
+        "Project Overview",
+        "Overall Comparison",
+        "Role Comparison",
+        "Findings",
+        "Clarification Questions",
+        "Limitations",
+    } <= set(workbook.sheetnames)
 
 
 def test_excel_template_header_can_follow_title_and_instruction_rows():
@@ -297,8 +352,13 @@ def test_traceable_export_includes_verified_inputs_mapping_assumptions_and_audit
 def test_material_findings_are_ranked_and_questions_include_figures():
     budget, _ = load_synthetic_budget()
     result = compare_track3(budget, synthetic_tenderers(budget))
-    assert {"Cost Variance to Budget (SGD)", "Cost Variance to Budget (%)", "Source Reference"} <= set(result.findings.columns)
-    assert result.findings.iloc[0]["Cost Variance to Budget (SGD)"] == result.findings["Cost Variance to Budget (SGD)"].max()
+    assert {"Cost Variance to Budget (SGD)", "Cost Variance to Budget (%)", "Source Reference"} <= set(
+        result.findings.columns
+    )
+    assert (
+        result.findings.iloc[0]["Cost Variance to Budget (SGD)"]
+        == result.findings["Cost Variance to Budget (SGD)"].max()
+    )
     assert any("SGD" in question for question in result.questions["Clarification Question"])
     assert {"S/N", "Priority"} <= set(result.questions.columns)
 
@@ -363,12 +423,26 @@ def test_excel_upload_combines_only_schedule_worksheets_with_sheet_provenance():
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
         pd.DataFrame({"Note": ["Instructions only"]}).to_excel(writer, sheet_name="Read me", index=False)
         pd.DataFrame(
-            [{"Role": "Technician", "Contract Year": 1, "Quantity": 4,
-              "Quantity Unit": "headcount", "Monthly Rate (SGD)": 4200}]
+            [
+                {
+                    "Role": "Technician",
+                    "Contract Year": 1,
+                    "Quantity": 4,
+                    "Quantity Unit": "headcount",
+                    "Monthly Rate (SGD)": 4200,
+                }
+            ]
         ).to_excel(writer, sheet_name="Base", index=False)
         pd.DataFrame(
-            [{"Role": "Technician", "Contract Year": 2, "Quantity": 4,
-              "Quantity Unit": "headcount", "Monthly Rate (SGD)": 4300}]
+            [
+                {
+                    "Role": "Technician",
+                    "Contract Year": 2,
+                    "Quantity": 4,
+                    "Quantity Unit": "headcount",
+                    "Monthly Rate (SGD)": 4300,
+                }
+            ]
         ).to_excel(writer, sheet_name="Option", index=False)
 
     frame = parse_upload("Tenderer A.xlsx", output.getvalue())

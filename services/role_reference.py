@@ -65,6 +65,19 @@ ROLE_FAMILIES = {
 
 
 def reference_context():
+    from services.reference_data import active_snapshot
+
+    if active_snapshot() is not None:
+        from services.role_catalogue import catalogue
+
+        current = catalogue()
+        return {
+            "source": current["source"],
+            "dataset_id": current["dataset_id"],
+            "typical": current["typical"],
+            "additional": current["additional"],
+            "purpose": "Active role-title choices only; not price or staffing requirements",
+        }
     return {
         "source": "Reviewed BCT manpower role inventory, 5 October 2026 (Markdown only)",
         "purpose": "Role-title context only; not cleaned/approved benchmark evidence",

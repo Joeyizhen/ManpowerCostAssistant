@@ -124,4 +124,4 @@ def test_excel_keeps_comparison_basis_and_zero_exclusion():
     assert row[headers.index("Current contract quantity / FTE")] == 2
     assert row[headers.index("Change from current (same basis)")] == -1
     assert row[headers.index("Quantity unit")] == "headcount"
-    assert len(wb.sheetnames) == 9 and sum(len(ws._charts) for ws in wb) == 2
+    assert len(wb.sheetnames) == 10 and sum(len(ws._charts) for ws in wb) == 2

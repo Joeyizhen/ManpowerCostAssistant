@@ -96,6 +96,19 @@ def test_defaults_are_editable_average_not_unsupported_rate_and_no_approval():
     assert p.roles[-1].rate is None and not p.confirmations
     p.roles[-1].rate = 6500
     p.roles[-1].rate_reason = ""
+    assert missing_for_gate(p, "rates", records)
+    from services.decision_basis import record_basis
+
+    record_basis(
+        p,
+        "rate",
+        [r.id for r in p.roles if r.included],
+        "Quotation",
+        "Synthetic quotation covers the same inclusive manpower duties at the contract start year",
+        "Synthetic quotation Q1",
+        "officer assumption",
+        "Synthetic officer",
+    )
     assert not missing_for_gate(p, "rates", records)
 
 

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from sqlalchemy import Column, Integer, MetaData, String, Table, Text, create_engine, select, update
+from sqlalchemy import Column, Integer, MetaData, String, Table, Text, create_engine, delete, select, update
 from sqlalchemy.exc import IntegrityError
 
 from services.models import Plan, now
@@ -72,6 +72,9 @@ class Store:
             return Plan.model_validate_json(row["body"]), row["revision"]
 
     def save(self, plan, owner, expected_revision):
+        from services.journey import working_draft
+
+        name = working_draft(plan).profile.name
         body = plan.model_dump_json()
         revision = expected_revision + 1
         try:
@@ -81,7 +84,7 @@ class Store:
                         self.projects.insert().values(
                             id=plan.id,
                             owner=owner,
-                            name=plan.profile.name,
+                            name=name,
                             revision=revision,
                             updated=now(),
                             body=body,
@@ -95,7 +98,7 @@ class Store:
                             self.projects.c.owner == owner,
                             self.projects.c.revision == expected_revision,
                         )
-                        .values(name=plan.profile.name, revision=revision, updated=now(), body=body)
+                        .values(name=name, revision=revision, updated=now(), body=body)
                     )
                     if updated.rowcount != 1:
                         raise ConflictError(
@@ -107,3 +110,25 @@ class Store:
         except IntegrityError:
             raise ConflictError("Project already exists; reload its newest revision") from None
         return revision
+
+    def delete(self, project_id, owner, expected_revision):
+        """Delete only the owned revision the officer explicitly selected, including its history."""
+        if expected_revision < 1:
+            raise ValueError("Select a saved project before deleting")
+        with self.engine.begin() as conn:
+            removed = conn.execute(
+                delete(self.projects).where(
+                    self.projects.c.id == project_id,
+                    self.projects.c.owner == owner,
+                    self.projects.c.revision == expected_revision,
+                )
+            )
+            if removed.rowcount != 1:
+                raise ConflictError(
+                    "The project changed or is no longer available. Select it again before deleting."
+                )
+            conn.execute(
+                delete(self.snapshots).where(
+                    self.snapshots.c.id == project_id, self.snapshots.c.owner == owner
+                )
+            )

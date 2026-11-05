@@ -41,11 +41,15 @@ def test_invalid_or_stale_review_batch_cannot_partially_apply():
 def test_answers_accumulate_without_presenting_a_proposal_until_requirements_ready():
     p = Plan()
     example = demo_plan()
-    update_notes(p, profile=example.profile.model_dump(mode="json"))
+    update_notes(p, profile={**example.profile.model_dump(mode="json"), "description": ""})
     result = prepare_review(p, "requirements", load_records())
     assert not result["ready"] and not p.pending
     assert p.profile.description == "" and working_draft(p).profile.base_years == 4
-    update_notes(p, responsibilities=[r.model_dump() for r in example.responsibilities])
+    update_notes(
+        p,
+        profile=example.profile.model_dump(mode="json"),
+        responsibilities=[r.model_dump() for r in example.responsibilities],
+    )
     assert prepare_review(p, "requirements", load_records())["ready"]
     assert not p.confirmations
     assert accept_review(p, "Officer", load_records()) == 2
@@ -70,7 +74,8 @@ def test_prior_answer_revision_requires_reconfirmation_and_external_duty_not_sta
     role["responsibility_ids"] = ["security"]
     update_notes(p, roles=[role])
     result = prepare_review(p, "manpower", records)
-    assert not result["ready"] and result["duplicated_external_coverage"] and not p.pending
+    assert result["ready"]
+    assert any(f["code"].startswith("duplicate_") for f in result["findings"])
 
 
 @pytest.mark.parametrize("checkpoint", ["rates", "escalation"])

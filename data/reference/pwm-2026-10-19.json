@@ -1,0 +1,1236 @@
+{
+  "origin": "Official MOM published wage schedules, retrieved and checked 19 October 2026; distinct from synthetic tender records",
+  "limitations": "Monthly full-time schedules only. Confirm eligibility, category, wage basis and dates; not a legal-compliance determination. Bonus, leave, CPF and other components are not included automatically. No post-publication rates inferred.",
+  "schedules": [
+    {
+      "id": "cleaning-1",
+      "sector": "cleaning",
+      "category": "Outsourced Group 1: office/commercial",
+      "job_level": "Supervisor",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/cleaning-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 2210
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 2455
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 2700
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 2870
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 3040
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 3210
+        }
+      ]
+    },
+    {
+      "id": "cleaning-2",
+      "sector": "cleaning",
+      "category": "Outsourced Group 1: office/commercial",
+      "job_level": "Multi-skilled cleaner / machine operator",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/cleaning-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 2010
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 2270
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 2530
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 2700
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 2870
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 3040
+        }
+      ]
+    },
+    {
+      "id": "cleaning-3",
+      "sector": "cleaning",
+      "category": "Outsourced Group 1: office/commercial",
+      "job_level": "General / indoor cleaner",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/cleaning-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 1570
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 1740
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 1910
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 2080
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 2250
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 2420
+        }
+      ]
+    },
+    {
+      "id": "cleaning-4",
+      "sector": "cleaning",
+      "category": "Outsourced Group 1: office/commercial",
+      "job_level": "Outdoor / healthcare / restroom cleaner",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/cleaning-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 1795
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 2060
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 2325
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 2495
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 2665
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 2835
+        }
+      ]
+    },
+    {
+      "id": "cleaning-5",
+      "sector": "cleaning",
+      "category": "Outsourced Group 2: F&B",
+      "job_level": "Supervisor",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/cleaning-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 2210
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 2455
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 2700
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 2870
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 3040
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 3210
+        }
+      ]
+    },
+    {
+      "id": "cleaning-6",
+      "sector": "cleaning",
+      "category": "Outsourced Group 2: F&B",
+      "job_level": "Multi-skilled cleaner / machine operator",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/cleaning-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 2010
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 2270
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 2530
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 2700
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 2870
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 3040
+        }
+      ]
+    },
+    {
+      "id": "cleaning-7",
+      "sector": "cleaning",
+      "category": "Outsourced Group 2: F&B",
+      "job_level": "General / indoor cleaner",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/cleaning-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 1570
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 1740
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 1910
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 2080
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 2250
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 2420
+        }
+      ]
+    },
+    {
+      "id": "cleaning-8",
+      "sector": "cleaning",
+      "category": "Outsourced Group 2: F&B",
+      "job_level": "Restroom / dishwasher / refuse collector",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/cleaning-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 1795
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 2060
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 2325
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 2495
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 2665
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 2835
+        }
+      ]
+    },
+    {
+      "id": "cleaning-9",
+      "sector": "cleaning",
+      "category": "Outsourced Group 2: F&B",
+      "job_level": "Table-top cleaner",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/cleaning-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 1670
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 1840
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 2010
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 2180
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 2350
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 2520
+        }
+      ]
+    },
+    {
+      "id": "cleaning-10",
+      "sector": "cleaning",
+      "category": "In-house cleaning",
+      "job_level": "Supervisor",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/cleaning-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 2210
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 2455
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 2700
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 2870
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 3040
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 3210
+        }
+      ]
+    },
+    {
+      "id": "cleaning-11",
+      "sector": "cleaning",
+      "category": "In-house cleaning",
+      "job_level": "Multi-skilled cleaner / machine operator",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/cleaning-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 2010
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 2270
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 2530
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 2700
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 2870
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 3040
+        }
+      ]
+    },
+    {
+      "id": "cleaning-12",
+      "sector": "cleaning",
+      "category": "In-house cleaning",
+      "job_level": "General / indoor cleaner",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/cleaning-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 1570
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 1740
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 1910
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 2080
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 2250
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 2420
+        }
+      ]
+    },
+    {
+      "id": "cleaning-13",
+      "sector": "cleaning",
+      "category": "In-house cleaning",
+      "job_level": "Restroom / dishwasher / refuse collector",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/cleaning-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 1795
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 2060
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 2325
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 2495
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 2665
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 2835
+        }
+      ]
+    },
+    {
+      "id": "cleaning-14",
+      "sector": "cleaning",
+      "category": "In-house cleaning",
+      "job_level": "Table-top cleaner",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/cleaning-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 1670
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 1840
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 2010
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 2180
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 2350
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 2520
+        }
+      ]
+    },
+    {
+      "id": "cleaning-15",
+      "sector": "cleaning",
+      "category": "Outsourced Group 3: conservancy",
+      "job_level": "Truck driver Class 4/5",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/cleaning-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 2410
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 2620
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 2830
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 3040
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 3250
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 3460
+        }
+      ]
+    },
+    {
+      "id": "cleaning-16",
+      "sector": "cleaning",
+      "category": "Outsourced Group 3: conservancy",
+      "job_level": "Supervisor / mechanical driver Class 3",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/cleaning-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 2210
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 2455
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 2700
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 2870
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 3040
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 3210
+        }
+      ]
+    },
+    {
+      "id": "cleaning-17",
+      "sector": "cleaning",
+      "category": "Outsourced Group 3: conservancy",
+      "job_level": "Multi-skilled cleaner / refuse collector",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/cleaning-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 2010
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 2270
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 2530
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 2700
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 2870
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 3040
+        }
+      ]
+    },
+    {
+      "id": "cleaning-18",
+      "sector": "cleaning",
+      "category": "Outsourced Group 3: conservancy",
+      "job_level": "General / restroom cleaner",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/cleaning-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 1795
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 2060
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 2325
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 2495
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 2665
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 2835
+        }
+      ]
+    },
+    {
+      "id": "security-19",
+      "sector": "security",
+      "category": "Outsourced full-time",
+      "job_level": "Security officer",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/security-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2028-12-31",
+      "points": [
+        {
+          "effective": "2024-01-01",
+          "wage": 2650
+        },
+        {
+          "effective": "2025-01-01",
+          "wage": 2870
+        },
+        {
+          "effective": "2026-01-01",
+          "wage": 3090
+        },
+        {
+          "effective": "2027-01-01",
+          "wage": 3310
+        },
+        {
+          "effective": "2028-01-01",
+          "wage": 3530
+        }
+      ]
+    },
+    {
+      "id": "security-20",
+      "sector": "security",
+      "category": "Outsourced full-time",
+      "job_level": "Senior security officer",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/security-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2028-12-31",
+      "points": [
+        {
+          "effective": "2024-01-01",
+          "wage": 2950
+        },
+        {
+          "effective": "2025-01-01",
+          "wage": 3170
+        },
+        {
+          "effective": "2026-01-01",
+          "wage": 3390
+        },
+        {
+          "effective": "2027-01-01",
+          "wage": 3610
+        },
+        {
+          "effective": "2028-01-01",
+          "wage": 3830
+        }
+      ]
+    },
+    {
+      "id": "security-21",
+      "sector": "security",
+      "category": "Outsourced full-time",
+      "job_level": "Security supervisor",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/security-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2028-12-31",
+      "points": [
+        {
+          "effective": "2024-01-01",
+          "wage": 3250
+        },
+        {
+          "effective": "2025-01-01",
+          "wage": 3470
+        },
+        {
+          "effective": "2026-01-01",
+          "wage": 3690
+        },
+        {
+          "effective": "2027-01-01",
+          "wage": 3910
+        },
+        {
+          "effective": "2028-01-01",
+          "wage": 4130
+        }
+      ]
+    },
+    {
+      "id": "security-22",
+      "sector": "security",
+      "category": "Outsourced full-time",
+      "job_level": "Senior security supervisor",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/security-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2028-12-31",
+      "points": [
+        {
+          "effective": "2024-01-01",
+          "wage": 3550
+        },
+        {
+          "effective": "2025-01-01",
+          "wage": 3770
+        },
+        {
+          "effective": "2026-01-01",
+          "wage": 3990
+        },
+        {
+          "effective": "2027-01-01",
+          "wage": 4210
+        },
+        {
+          "effective": "2028-01-01",
+          "wage": 4430
+        }
+      ]
+    },
+    {
+      "id": "security-23",
+      "sector": "security",
+      "category": "In-house full-time",
+      "job_level": "Security officer",
+      "wage_basis": "monthly gross wage excluding overtime",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/security-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2028-12-31",
+      "points": [
+        {
+          "effective": "2024-01-01",
+          "wage": 2175
+        },
+        {
+          "effective": "2025-01-01",
+          "wage": 2315
+        },
+        {
+          "effective": "2026-01-01",
+          "wage": 2475
+        },
+        {
+          "effective": "2027-01-01",
+          "wage": 2635
+        },
+        {
+          "effective": "2028-01-01",
+          "wage": 2795
+        }
+      ]
+    },
+    {
+      "id": "security-24",
+      "sector": "security",
+      "category": "In-house full-time",
+      "job_level": "Senior security officer",
+      "wage_basis": "monthly gross wage excluding overtime",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/security-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2028-12-31",
+      "points": [
+        {
+          "effective": "2024-01-01",
+          "wage": 2375
+        },
+        {
+          "effective": "2025-01-01",
+          "wage": 2515
+        },
+        {
+          "effective": "2026-01-01",
+          "wage": 2675
+        },
+        {
+          "effective": "2027-01-01",
+          "wage": 2835
+        },
+        {
+          "effective": "2028-01-01",
+          "wage": 2995
+        }
+      ]
+    },
+    {
+      "id": "security-25",
+      "sector": "security",
+      "category": "In-house full-time",
+      "job_level": "Security supervisor",
+      "wage_basis": "monthly gross wage excluding overtime",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/security-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2028-12-31",
+      "points": [
+        {
+          "effective": "2024-01-01",
+          "wage": 2605
+        },
+        {
+          "effective": "2025-01-01",
+          "wage": 2745
+        },
+        {
+          "effective": "2026-01-01",
+          "wage": 2905
+        },
+        {
+          "effective": "2027-01-01",
+          "wage": 3065
+        },
+        {
+          "effective": "2028-01-01",
+          "wage": 3225
+        }
+      ]
+    },
+    {
+      "id": "landscape-26",
+      "sector": "landscape",
+      "category": "Outsourced or in-house full-time",
+      "job_level": "Landscape worker",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/landscape-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 1750
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 1850
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 1950
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 2095
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 2240
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 2385
+        }
+      ]
+    },
+    {
+      "id": "landscape-27",
+      "sector": "landscape",
+      "category": "Outsourced or in-house full-time",
+      "job_level": "Landscape technician",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/landscape-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 2010
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 2170
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 2330
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 2490
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 2650
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 2810
+        }
+      ]
+    },
+    {
+      "id": "landscape-28",
+      "sector": "landscape",
+      "category": "Outsourced or in-house full-time",
+      "job_level": "Assistant landscape supervisor / landscape specialist",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/landscape-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 2215
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 2380
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 2545
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 2685
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 2825
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 2965
+        }
+      ]
+    },
+    {
+      "id": "landscape-29",
+      "sector": "landscape",
+      "category": "Outsourced or in-house full-time",
+      "job_level": "Landscape supervisor / senior landscape specialist",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/landscape-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 2600
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 2750
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 2900
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 3060
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 3220
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 3380
+        }
+      ]
+    },
+    {
+      "id": "lift-30",
+      "sector": "lift",
+      "category": "Full-time lift/escalator maintenance",
+      "job_level": "Principal L&E specialist",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/lift-and-escalator-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 3330
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 3460
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 3590
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 3720
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 3935
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 4150
+        }
+      ]
+    },
+    {
+      "id": "lift-31",
+      "sector": "lift",
+      "category": "Full-time lift/escalator maintenance",
+      "job_level": "L&E supervisor",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/lift-and-escalator-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 3015
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 3230
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 3445
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 3660
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 3875
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 4090
+        }
+      ]
+    },
+    {
+      "id": "lift-32",
+      "sector": "lift",
+      "category": "Full-time lift/escalator maintenance",
+      "job_level": "Senior L&E specialist",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/lift-and-escalator-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 2805
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 3010
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 3215
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 3420
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 3620
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 3820
+        }
+      ]
+    },
+    {
+      "id": "lift-33",
+      "sector": "lift",
+      "category": "Full-time lift/escalator maintenance",
+      "job_level": "L&E specialist",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/lift-and-escalator-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 2460
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 2670
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 2880
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 3090
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 3280
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 3470
+        }
+      ]
+    },
+    {
+      "id": "lift-34",
+      "sector": "lift",
+      "category": "Full-time lift/escalator maintenance",
+      "job_level": "Assistant L&E specialist",
+      "wage_basis": "monthly basic wage",
+      "full_time_hours": "35\u201344 hours per week",
+      "source": "https://www.mom.gov.sg/employment-practices/progressive-wage-model/lift-and-escalator-sector",
+      "verified_on": "2026-10-19",
+      "valid_until": "2029-06-30",
+      "points": [
+        {
+          "effective": "2023-07-01",
+          "wage": 2075
+        },
+        {
+          "effective": "2024-07-01",
+          "wage": 2300
+        },
+        {
+          "effective": "2025-07-01",
+          "wage": 2525
+        },
+        {
+          "effective": "2026-07-01",
+          "wage": 2750
+        },
+        {
+          "effective": "2027-07-01",
+          "wage": 2915
+        },
+        {
+          "effective": "2028-07-01",
+          "wage": 3080
+        }
+      ]
+    }
+  ]
+}
