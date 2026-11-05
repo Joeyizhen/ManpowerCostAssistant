@@ -11,6 +11,10 @@ import streamlit as st
 
 from services.agent import create_client
 from services.agent2.track3 import (
+    HIGH_VARIANCE_PERCENT,
+    HIGH_VARIANCE_SGD,
+    MEDIUM_VARIANCE_PERCENT,
+    MEDIUM_VARIANCE_SGD,
     Track3InputError,
     parse_upload,
     role_mapping_options,
@@ -19,7 +23,7 @@ from services.agent2.track3 import (
 )
 from services.agent2.track4 import (
     COST_INDEX,
-    SYNTHETIC_LABEL,
+    MIN_COMPARABLE_RECORDS,
     Track4Result,
     compare_with_history,
     cost_index_snapshot,
@@ -84,6 +88,7 @@ def _initialise():
         "track4_upload_form_open": True,
         "track4_upload_version": 0,
         "track4_upload_notice": None,
+        "track4_project_notice": None,
         "track4_roles_confirmed": False,
     }
     for key, value in defaults.items():
@@ -155,6 +160,73 @@ def _restore(raw: bytes):
         None if saved is None else Track4Result(**{name: read(value) for name, value in saved.items()})
     )
     st.session_state.track4_step = min(6, max(1, int(payload.get("step", 1))))
+
+
+def _save_or_resume_project():
+    """Keep visible save and resume controls available throughout Track 4."""
+    if st.session_state.track4_project_notice:
+        st.success(st.session_state.track4_project_notice)
+        st.session_state.track4_project_notice = None
+
+    save_column, resume_column, explanation_column = st.columns([1, 1, 3], gap="small")
+    with save_column:
+        if st.session_state.track4_project:
+            name = st.session_state.track4_project.get(
+                "name", "historical-review"
+            ).replace(" ", "_")
+            st.download_button(
+                "💾 Save progress",
+                _save_bytes(),
+                f"{name}_Track4_Project.json",
+                "application/json",
+                key="track4_save_project",
+                width="stretch",
+                help="Save the current Track 4 project to your device.",
+            )
+        else:
+            st.button(
+                "💾 Save progress",
+                disabled=True,
+                key="track4_save_project_disabled",
+                width="stretch",
+                help="Create the project details before saving progress.",
+            )
+
+    with resume_column:
+        with st.popover(
+            "📂 Load progress",
+            key="track4_load_progress_popover",
+            width="stretch",
+            help="Resume work from a Track 4 project file saved earlier.",
+        ):
+            st.caption("Choose a previously saved Track 4 project file.")
+            saved = st.file_uploader(
+                "Choose saved project file",
+                type=["json"],
+                key="track4_resume_project",
+                label_visibility="collapsed",
+            )
+            if st.button(
+                "Load saved project",
+                type="primary",
+                disabled=saved is None,
+                key="track4_load_project",
+                width="stretch",
+            ):
+                try:
+                    _restore(saved.getvalue())
+                    st.session_state.track4_project_notice = (
+                        "Saved project loaded. You can continue from where you stopped."
+                    )
+                    st.rerun()
+                except Exception:
+                    st.error("This is not a valid Track 4 saved-project file.")
+
+    with explanation_column:
+        st.caption(
+            "Save downloads the complete project—including tender data, settings, findings and "
+            "review notes—to your device. Nothing is stored on a server."
+        )
 
 
 def _progress():
@@ -268,6 +340,15 @@ def _overall_visual(overall):
     band_width = max(position(high) - band_left, 2.0)
     marker_left = position(submitted)
     midpoint_left = position(norm)
+    if marker_left < 14:
+        marker_label_transform = "translateX(0)"
+        marker_label_align = "left"
+    elif marker_left > 86:
+        marker_label_transform = "translateX(-100%)"
+        marker_label_align = "right"
+    else:
+        marker_label_transform = "translateX(-50%)"
+        marker_label_align = "center"
     st.markdown(
         f"""
 <div style="border:1px solid #d7dee8;border-radius:12px;padding:20px 22px 18px;background:#fff;">
@@ -278,13 +359,13 @@ def _overall_visual(overall):
     <span><span style="display:inline-block;height:14px;border-left:3px dashed #147D74;margin:0 9px -2px 3px;"></span>Historical midpoint</span>
     <span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:{color};margin-right:7px;"></span>Your submitted tender</span>
   </div>
-  <div style="position:relative;height:94px;margin:0 8px;">
-    <div style="position:absolute;left:0;right:0;top:38px;height:8px;border-radius:8px;background:#e8edf3;"></div>
-    <div style="position:absolute;left:{band_left:.2f}%;width:{band_width:.2f}%;top:32px;height:20px;border-radius:10px;background:#b9e6ce;"></div>
-    <div style="position:absolute;left:{midpoint_left:.2f}%;top:59px;transform:translateX(-50%);color:#147D74;font-size:.78rem;font-weight:750;white-space:nowrap;text-align:center;">MIDPOINT<br>{_money(norm)}</div>
-    <div style="position:absolute;left:{midpoint_left:.2f}%;top:27px;height:30px;border-left:3px dashed #147D74;"></div>
-    <div style="position:absolute;left:{marker_left:.2f}%;top:1px;transform:translateX(-50%);color:{color};font-size:.78rem;font-weight:800;white-space:nowrap;text-align:center;">YOUR TENDER<br>{_money(submitted)} ({variance:+.1%})</div>
-    <div style="position:absolute;left:{marker_left:.2f}%;top:26px;transform:translateX(-50%);width:24px;height:24px;border-radius:50%;background:{color};border:4px solid white;box-shadow:0 0 0 2px {color};"></div>
+  <div style="position:relative;height:112px;margin:0 8px;">
+    <div style="position:absolute;left:0;right:0;top:58px;height:8px;border-radius:8px;background:#e8edf3;"></div>
+    <div style="position:absolute;left:{band_left:.2f}%;width:{band_width:.2f}%;top:52px;height:20px;border-radius:10px;background:#b9e6ce;"></div>
+    <div style="position:absolute;left:{midpoint_left:.2f}%;top:79px;transform:translateX(-50%);color:#147D74;font-size:.78rem;font-weight:750;white-space:nowrap;text-align:center;">MIDPOINT<br>{_money(norm)}</div>
+    <div style="position:absolute;left:{midpoint_left:.2f}%;top:47px;height:30px;border-left:3px dashed #147D74;"></div>
+    <div style="position:absolute;left:{marker_left:.2f}%;top:0;transform:{marker_label_transform};color:{color};font-size:.78rem;font-weight:800;line-height:1.3;white-space:nowrap;text-align:{marker_label_align};background:#fff;padding:1px 4px;border-radius:4px;">YOUR TENDER<br>{_money(submitted)} ({variance:+.1%})</div>
+    <div style="position:absolute;left:{marker_left:.2f}%;top:46px;transform:translateX(-50%);width:24px;height:24px;border-radius:50%;background:{color};border:4px solid white;box-shadow:0 0 0 2px {color};"></div>
   </div>
   <div style="display:flex;justify-content:space-between;gap:18px;margin-top:0;flex-wrap:wrap;">
     <div><div style="font-size:.78rem;color:#607086;font-weight:700;">RANGE START</div><div style="font-weight:750;">{_money(low)}</div></div>
@@ -329,13 +410,15 @@ def _render_overall_assessment(result, tenderer):
     findings = result.findings[result.findings["Tenderer"] == tenderer]
     attention = findings[findings["Priority"].isin(["High", "Medium", "Manual review"])]
     roles = ", ".join(attention["Standard Role"].drop_duplicates().head(3)) or "No material role outliers"
-    st.markdown("#### Overall assessment")
     narrative = result.narrative.iloc[0]
     if narrative["Status"] == "AI-assisted interpretation":
+        st.markdown("#### AI overall assessment")
+        st.caption("AI-assisted interpretation of the verified comparison calculations and cited evidence.")
         st.markdown(narrative["Narrative"])
         with st.expander("Evidence used by the AI assessment"):
             st.write(narrative["Evidence Basis"])
     else:
+        st.markdown("#### Overall assessment")
         if variance is None:
             st.markdown(
                 f"""
@@ -393,31 +476,12 @@ def render_agent2_track4():
             st.session_state.track4_step -= 1
             st.rerun()
     stale = _is_stale()
-    if st.session_state.track4_project:
-        name = st.session_state.track4_project.get("name", "historical-review").replace(" ", "_")
-        st.download_button(
-            "Download project file to continue later",
-            _save_bytes(),
-            f"{name}_Track4_Project.json",
-            "application/json",
-            help="Downloads the project, comparison records, role matches, findings and reviewer notes. Nothing is saved to a server.",
-        )
-        st.caption(
-            "Store this JSON file securely. Upload it under Project Details to resume later; nothing is saved to a server."
-        )
+    _save_or_resume_project()
 
     step = st.session_state.track4_step
     if step == 1:
         st.header("Create or resume a tender review")
         st.write("Tell us about the tender so we can compare it with the most relevant past submissions.")
-        saved = st.file_uploader("Resume a saved Track 4 project", type=["json"], key="track4_resume")
-        if saved and st.button("Resume saved project"):
-            try:
-                _restore(saved.getvalue())
-                st.success("Project restored.")
-                st.rerun()
-            except Exception:
-                st.error("This is not a valid saved Track 4 project file.")
         with st.form("track4_project_form"):
             name = st.text_input("Project name *", value=st.session_state.track4_project.get("name", ""))
             reference = st.text_input(
@@ -569,7 +633,7 @@ def render_agent2_track4():
             else:
                 st.info("Five tenderers have been added. Remove one to upload a replacement.")
         with st.expander("Need an example to explore the feature?"):
-            st.caption("This loads a clearly labelled demonstration tender. It does not replace or upload the comparison database.")
+            st.caption("This loads a built-in example tender. It does not replace or upload the comparison database.")
             if st.button("Use example tender"):
                 st.session_state.track4_tenderers = synthetic_track4_tenderers(
                     include_comparison_vendors=True
@@ -788,50 +852,20 @@ def render_agent2_track4():
             st.session_state.track4_step = 4
             st.rerun()
         st.header("Your tender pricing review")
-        st.warning(SYNTHETIC_LABEL)
-        st.write("Start with the overall position, then work through only the items that need attention.")
-        overall_tab, attention_tab, roles_tab, policy_tab, questions_tab, evidence_tab = st.tabs(
+        st.warning("REFERENCE DATA — confirm the source and suitability of comparison records before making a procurement decision.")
+        st.write(
+            "Start with the overview of items to review, then examine the supporting role, "
+            "cost and policy details."
+        )
+        attention_tab, roles_tab, policy_tab, questions_tab, evidence_tab = st.tabs(
             [
-                "Overview",
-                "Needs attention",
+                "Overall items to review",
                 "Role & cost summary",
                 "Policy checks",
                 "Clarification questions",
                 "How it works",
             ]
         )
-        with overall_tab:
-            st.subheader("Is the total price in line with comparable submissions?")
-            selected_tenderer = _overall_visual(result.overall)
-            with st.container(border=True):
-                _render_overall_assessment(result, selected_tenderer)
-            # settings() reads environment variables and safely defaults when no
-            # Streamlit secrets file exists; the deterministic review stays usable.
-            configured = settings()
-            if configured.api_key and configured.model:
-                st.success(f"OpenAI is configured for AI-assisted assessment using {configured.model}.")
-                if st.button("Regenerate AI assessment"):
-                    with st.spinner("Explaining the verified calculations and cited policy evidence…"):
-                        result.narrative = generate_review_narrative(
-                            result, create_client(configured.api_key), configured.model
-                        )
-                    st.rerun()
-            elif configured.api_key:
-                st.warning(
-                    "The OpenAI API key was detected, but no model has been configured. Add an "
-                    "OPENAI_MODEL value to the private .env file, then restart the app. The "
-                    "verified calculations remain available without AI."
-                )
-            elif configured.model:
-                st.warning(
-                    "An OpenAI model is configured, but the API key is missing. Add the key to the "
-                    "private .env file and restart the app."
-                )
-            else:
-                st.caption(
-                    "OpenAI is not configured. Add both OPENAI_API_KEY and OPENAI_MODEL to the "
-                    "private .env file, then restart the app."
-                )
         with attention_tab:
             st.subheader("Items to review")
             st.caption("Choose a priority to see only those items, then record the review decision and notes.")
@@ -858,6 +892,50 @@ def render_agent2_track4():
                     ):
                         st.session_state.track4_priority_filter = priority
                         st.rerun()
+                st.markdown("#### How priority is determined")
+                st.caption(
+                    "The system uses the absolute size of the difference, so a rate that is unusually "
+                    "high or unusually low is assessed using the same thresholds. Meeting either the "
+                    "percentage or dollar-impact threshold is enough to enter that priority."
+                )
+                priority_matrix = pd.DataFrame(
+                    [
+                        {
+                            "Priority": "🔴 High",
+                            "Difference from adjusted median": f"{HIGH_VARIANCE_PERCENT:.0%} or more",
+                            "Estimated full-contract impact": f"S$ {HIGH_VARIANCE_SGD:,.0f} or more",
+                            "Recommended action": "Check before proceeding",
+                        },
+                        {
+                            "Priority": "🟠 Medium",
+                            "Difference from adjusted median": (
+                                f"{MEDIUM_VARIANCE_PERCENT:.0%} to below {HIGH_VARIANCE_PERCENT:.0%}"
+                            ),
+                            "Estimated full-contract impact": (
+                                f"S$ {MEDIUM_VARIANCE_SGD:,.0f} to below S$ {HIGH_VARIANCE_SGD:,.0f}"
+                            ),
+                            "Recommended action": "Seek clarification",
+                        },
+                        {
+                            "Priority": "🟢 Low",
+                            "Difference from adjusted median": f"Below {MEDIUM_VARIANCE_PERCENT:.0%}",
+                            "Estimated full-contract impact": f"Below S$ {MEDIUM_VARIANCE_SGD:,.0f}",
+                            "Recommended action": "Note and monitor",
+                        },
+                        {
+                            "Priority": "🔵 Manual review",
+                            "Difference from adjusted median": "Not classified",
+                            "Estimated full-contract impact": "Not classified",
+                            "Recommended action": "Check the evidence manually",
+                        },
+                    ]
+                )
+                st.dataframe(priority_matrix, hide_index=True, width="stretch")
+                st.caption(
+                    f"Classification order: Manual review applies first when fewer than "
+                    f"{MIN_COMPARABLE_RECORDS} comparable past records are available. "
+                    "Otherwise, High is checked before Medium; Low applies only when neither threshold is met."
+                )
                 selected_priority = st.session_state.track4_priority_filter
                 selected_icon = priority_meta[selected_priority][0]
                 filtered = result.findings[result.findings["Priority"] == selected_priority]
