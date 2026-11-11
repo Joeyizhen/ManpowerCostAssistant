@@ -14,7 +14,7 @@ import xlsxwriter
 from services.agent2.track3 import Track3InputError, validation_issues, variance_severity
 from services.evidence import map_role
 
-SYNTHETIC_LABEL = "SYNTHETIC DEMONSTRATION DATA — NOT VERIFIED MARKET EVIDENCE"
+SYNTHETIC_LABEL = "BUILT-IN EXAMPLE REFERENCE DATA — VERIFY SUITABILITY BEFORE USE"
 MIN_COMPARABLE_RECORDS = 5
 TARGET_PRICING_YEAR = 2026
 MOM_WAGE_SOURCE = "https://stats.mom.gov.sg/SL/Pages/Annual-Wage-Changes-Data-and-Other-Resources.aspx"
@@ -236,10 +236,10 @@ def load_synthetic_history():
                     shifts[i % 3],
                     "Included" if i % 2 else "Not stated",
                     "CPF; leave; training; applicable wage requirements",
-                    f"synthetic_tender_{year}_{1 + i // 5:03d}.xlsx",
+                    f"example_reference_{year}_{1 + i // 5:03d}.xlsx",
                     f"Year {1 + i % 6}",
                     6 + i % 12,
-                    "synthetic historical tender record",
+                    "built-in example reference record",
                     True,
                 ]
             )
@@ -299,19 +299,19 @@ def synthetic_track4_tenderers(include_comparison_vendors=False):
                     "Operating Hours per Week": 44,
                     "Relief Coverage": "Not stated" if role == "Technical Executive" else "Included",
                     "Declared Total (SGD)": round(rate * qty * 12, 2),
-                    "Source": f"Synthetic Current Tender, sheet 'Year {year}', row 6",
+                    "Source": f"Example Tender, sheet 'Year {year}', row 6",
                 }
             )
     alpha = pd.DataFrame(rows)
-    tenderers = {"Synthetic Tenderer Alpha": alpha}
+    tenderers = {"Tenderer Alpha": alpha}
     if include_comparison_vendors:
         # Demonstrate the multi-tenderer view without changing the default test
         # fixture used by the calculation suite.
-        for name, factor in (("Synthetic Tenderer Beta", 0.94), ("Synthetic Tenderer Gamma", 1.11)):
+        for name, factor in (("Tenderer Beta", 0.94), ("Tenderer Gamma", 1.11)):
             frame = alpha.copy(deep=True)
             for column in ("Monthly Rate (SGD)", "Annual Cost (SGD)", "Declared Total (SGD)"):
                 frame[column] = (frame[column] * factor).round(2)
-            frame["Source"] = frame["Source"].str.replace("Synthetic Current Tender", name, regex=False)
+            frame["Source"] = frame["Source"].str.replace("Example Tender", name, regex=False)
             tenderers[name] = frame
     return tenderers
 

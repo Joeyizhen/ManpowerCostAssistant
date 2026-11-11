@@ -48,7 +48,7 @@ def _state():
         "agent2_role_mapping_fingerprint": None,
         "agent2_budget_confirmed": False,
         "agent2_limitations": [
-            "Historical rate comparisons use the records available to this prototype. Synthetic records are demonstration evidence only and must not be treated as verified market prices.",
+            "Historical rate comparisons use the reference records available to this prototype. Confirm the source and suitability of those records before making a procurement decision.",
             "The analysis compares the verified quantities, units, monthly rates and contract years supplied by the reviewer. It does not independently confirm tender compliance, service quality, staffing adequacy or the authenticity of approvals.",
             "Findings and clarification questions are decision-support prompts. They do not reject a tenderer, recommend an award or replace procurement, legal, finance and operational review.",
             "Source references are derived from uploaded filenames, matching Excel worksheets and row numbers where available. Reviewers must check the original signed submission before relying on a finding.",
@@ -160,6 +160,79 @@ def _restore_project(content: bytes):
     )
     st.session_state.agent2_step = min(5, max(1, int(payload.get("step", 1))))
     reset_task_inputs(3)
+
+
+def render_agent2_track3_sidebar(cfg):
+    """Render persistent project controls for the approved-budget comparison."""
+    _state()
+    with st.sidebar:
+        st.caption("TENDER EVALUATION · AGENT 2")
+        st.title("Compare against approved budget")
+        project = st.session_state.agent2_project
+        if project:
+            st.caption(f"{project.get('name', 'Untitled project')} · Step {st.session_state.agent2_step} of 5")
+        else:
+            st.caption("New draft · project details not yet saved")
+
+        if st.button("New blank comparison", key="agent2_sidebar_new", width="stretch"):
+            for key in list(st.session_state):
+                if key.startswith("agent2_"):
+                    st.session_state.pop(key, None)
+            reset_task_inputs(3)
+            st.rerun()
+
+        if project:
+            project_name = project.get("name", "tender-review").replace(" ", "_")
+            st.download_button(
+                "Save project snapshot",
+                data=_save_project_bytes(),
+                file_name=f"{project_name}_Budget_Comparison.json",
+                mime="application/json",
+                key="agent2_sidebar_save",
+                width="stretch",
+                help="Download the complete Track 3 project to your device.",
+            )
+        else:
+            st.button(
+                "Save project snapshot",
+                key="agent2_sidebar_save_disabled",
+                disabled=True,
+                width="stretch",
+                help="Enter and save the project details first.",
+            )
+
+        with st.expander("Restore a project snapshot"):
+            saved = st.file_uploader(
+                "Track 3 project JSON",
+                type=["json"],
+                key="agent2_sidebar_restore_file",
+            )
+            if st.button(
+                "Load selected snapshot",
+                key="agent2_sidebar_restore",
+                disabled=saved is None,
+                width="stretch",
+            ):
+                try:
+                    _restore_project(saved.getvalue())
+                    st.success("Project restored.")
+                    st.rerun()
+                except Exception:
+                    st.error("This is not a valid Track 3 project snapshot.")
+
+        st.caption(
+            "You can keep multiple snapshots on your device and load the one you need. "
+            "Only one project is open at a time."
+        )
+        st.divider()
+        if cfg.api_key and cfg.model:
+            st.success("Live OpenAI configured")
+            st.caption(f"Model: {cfg.model}")
+        else:
+            st.info("Offline calculation mode")
+        st.caption(
+            "Local review mode. Project snapshots remain on this computer unless you share them."
+        )
 
 
 def _progress(step: int):
@@ -428,7 +501,10 @@ def _render_upload_feedback(feedback: dict | None):
     if not feedback:
         return
     getattr(st, feedback["level"])(feedback["message"])
-    if feedback["rows"]:
+    # Show row-level detail only when the user must correct blocking errors.
+    # Non-blocking review notes are retained in the data but do not need a
+    # second table on the upload screen.
+    if feedback["level"] == "error" and feedback["rows"]:
         st.dataframe(pd.DataFrame(feedback["rows"]), hide_index=True, width="stretch")
 
 
@@ -589,8 +665,12 @@ def render_agent2_track3(cfg=None):
 
     elif step == 2:
         st.header("Upload the documents for comparison")
-        st.info("For a quick tour, load the clearly labelled synthetic example. No OpenAI key is required.")
-        if st.button("Load synthetic approved budget and 3 tenderers", type="primary", width="stretch"):
+        st.info("For a quick tour, load the built-in example. No OpenAI key is required.")
+        if st.button(
+            "Load synthetic approved budget and 3 tenderers",
+            type="primary",
+            width="stretch",
+        ):
             budget, document = load_synthetic_budget()
             st.session_state.agent2_budget = budget
             st.session_state.agent2_tenderers = synthetic_tenderers(budget)
@@ -767,7 +847,8 @@ def render_agent2_track3(cfg=None):
         )
         if st.session_state.agent2_demo:
             st.warning(
-                "SYNTHETIC DEMONSTRATION DATA — not real tenders, market evidence or management approval."
+                "BUILT-IN EXAMPLE — confirm all sources and approvals before using the results "
+                "for a procurement decision."
             )
         validation_frames = []
         for document_name, document_frame in {
@@ -1061,9 +1142,22 @@ def render_agent2_track3(cfg=None):
                 key=retained_key("navigation_agent2_views_739"),
             )
             role_view = result.roles[result.roles["Tenderer"] == selected]
+            comparison_columns = [
+                "Tenderer",
+                "Standard Role",
+                "Approved Budget Quantity",
+                "Tendered Quantity",
+                "Quantity Variance",
+                "Approved Budget Monthly Rate (SGD)",
+                "Tendered Monthly Rate (SGD)",
+                "Role Cost Variance to Budget (SGD)",
+                "Role Cost Variance to Budget (%)",
+                "Comparison with Similar Past Rates",
+                "Similar Past Rates Found",
+            ]
             st.dataframe(
                 _variance_style(
-                    role_view,
+                    role_view[comparison_columns],
                     [
                         "Quantity Variance",
                         "Role Cost Variance to Budget (SGD)",
@@ -1078,6 +1172,23 @@ def render_agent2_track3(cfg=None):
                 "‘Comparison with Similar Past Rates’ shows where the submitted monthly rate sits against comparable records; "
                 "‘Similar Past Rates Found’ is the number of earlier rate records used for that comparison."
             )
+            with st.expander("See benchmark evidence and calculation method"):
+                evidence_columns = [
+                    "Standard Role",
+                    "Benchmark Pricing Year",
+                    "Benchmark Median Monthly Rate (SGD)",
+                    "Benchmark Typical Range Low (SGD)",
+                    "Benchmark Typical Range High (SGD)",
+                    "Benchmark Record IDs",
+                    "Benchmark Source References",
+                    "Benchmark Method",
+                    "Benchmark Limitations",
+                ]
+                st.dataframe(role_view[evidence_columns], hide_index=True, width="stretch")
+                st.caption(
+                    "The median and middle-50% range are descriptive comparisons only. "
+                    "They do not establish tender compliance, value for money or an award decision."
+                )
             st.markdown("#### Findings to review")
             st.caption(
                 "🔴 High: variance is at least 15%, or there is a major coverage gap · "

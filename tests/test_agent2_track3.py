@@ -107,6 +107,50 @@ def test_validation_warnings_accept_and_explain_unusual_inputs():
     assert warnings["Review note"].str.contains("no benchmark will be invented").any()
 
 
+def test_blank_officer_justification_does_not_accept_high_rate():
+    frame = pd.DataFrame(
+        [
+            {
+                "Role": "Senior Facilities Manager",
+                "Contract Year": 1,
+                "Quantity": 1,
+                "Quantity Unit": "headcount",
+                "Monthly Rate (SGD)": 18500,
+                "Source": "tender schedule",
+                "Officer Justification": pd.NA,
+                "Officer Assumption Confirmed": pd.NA,
+            }
+        ]
+    )
+
+    assert validation_warnings(frame).empty
+
+
+def test_track3_role_comparison_retains_benchmark_provenance():
+    _, budget, tenderers, _ = _ready_context()
+    result = compare_track3(
+        budget,
+        tenderers,
+        benchmark_year=2026,
+    )
+
+    required = {
+        "Benchmark Pricing Year",
+        "Benchmark Median Monthly Rate (SGD)",
+        "Benchmark Typical Range Low (SGD)",
+        "Benchmark Typical Range High (SGD)",
+        "Benchmark Record IDs",
+        "Benchmark Source References",
+        "Benchmark Method",
+        "Benchmark Limitations",
+    }
+    assert required <= set(result.roles.columns)
+    available = result.roles[result.roles["Similar Past Rates Found"] >= 3]
+    assert not available.empty
+    assert available["Benchmark Record IDs"].ne("None").all()
+    assert available["Benchmark Source References"].ne("No matching source").all()
+
+
 def _ready_context():
     budget, _ = load_synthetic_budget()
     tenderers = synthetic_tenderers(budget)

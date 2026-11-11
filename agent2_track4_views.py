@@ -25,7 +25,6 @@ from services.agent2.track3 import (
 from services.agent2.track4 import (
     COST_INDEX,
     MIN_COMPARABLE_RECORDS,
-    SYNTHETIC_LABEL,
     Track4Result,
     compare_with_history,
     cost_index_snapshot,
@@ -190,6 +189,79 @@ def _restore(raw: bytes):
     )
     st.session_state.track4_step = min(6, max(1, int(payload.get("step", 1))))
     reset_task_inputs(4)
+
+
+def render_agent2_track4_sidebar(cfg):
+    """Render persistent project controls for tender-proposal comparison."""
+    _initialise()
+    with st.sidebar:
+        st.caption("TENDER EVALUATION · AGENT 2")
+        st.title("Compare tenderer proposals")
+        project = st.session_state.track4_project
+        if project:
+            st.caption(f"{project.get('name', 'Untitled project')} · Step {st.session_state.track4_step} of 6")
+        else:
+            st.caption("New draft · project details not yet saved")
+
+        if st.button("New blank comparison", key="track4_sidebar_new", width="stretch"):
+            for key in list(st.session_state):
+                if key.startswith("track4_"):
+                    st.session_state.pop(key, None)
+            reset_task_inputs(4)
+            st.rerun()
+
+        if project:
+            project_name = project.get("name", "proposal-comparison").replace(" ", "_")
+            st.download_button(
+                "Save project snapshot",
+                data=_save_bytes(),
+                file_name=f"{project_name}_Proposal_Comparison.json",
+                mime="application/json",
+                key="track4_sidebar_save",
+                width="stretch",
+                help="Download the complete Track 4 project to your device.",
+            )
+        else:
+            st.button(
+                "Save project snapshot",
+                key="track4_sidebar_save_disabled",
+                disabled=True,
+                width="stretch",
+                help="Enter the project details first.",
+            )
+
+        with st.expander("Restore a project snapshot"):
+            saved = st.file_uploader(
+                "Track 4 project JSON",
+                type=["json"],
+                key="track4_sidebar_restore_file",
+            )
+            if st.button(
+                "Load selected snapshot",
+                key="track4_sidebar_restore",
+                disabled=saved is None,
+                width="stretch",
+            ):
+                try:
+                    _restore(saved.getvalue())
+                    st.session_state.track4_project_notice = "Project restored from snapshot."
+                    st.rerun()
+                except Exception:
+                    st.error("This is not a valid Track 4 project snapshot.")
+
+        st.caption(
+            "You can keep multiple snapshots on your device and load the one you need. "
+            "Only one project is open at a time."
+        )
+        st.divider()
+        if cfg.api_key and cfg.model:
+            st.success("Live OpenAI configured")
+            st.caption(f"Model: {cfg.model}")
+        else:
+            st.info("Offline calculation mode")
+        st.caption(
+            "Local review mode. Project snapshots remain on this computer unless you share them."
+        )
 
 
 def _save_or_resume_project():
@@ -499,11 +571,10 @@ def render_agent2_track4(cfg=None):
     from services.reference_data import active_snapshot
 
     prepared_active = active_snapshot() is not None
-    st.caption(
-        "Prepared source quotations; synthetic calendar dates, unknown award outcomes and unconfirmed allocation units."
-        if prepared_active
-        else SYNTHETIC_LABEL
-    )
+    if prepared_active:
+        st.caption(
+            "Prepared source quotations; calendar dates, award outcomes and allocation units require verification."
+        )
     st.write(
         "Upload a tender proposal to see whether its pricing is in line with comparable past submissions, what needs attention and what to clarify."
     )
@@ -826,7 +897,7 @@ def render_agent2_track4(cfg=None):
             available_years = sorted(history["Pricing Year"].dropna().astype(int).unique())
             min_year, max_year = min(available_years), max(available_years)
             st.caption(
-                f"Synthetic demonstration: {len(history)} invented records, pricing years {min_year}–{max_year}."
+                f"Built-in example reference set: {len(history)} records, pricing years {min_year}–{max_year}."
             )
         project, old = st.session_state.track4_project, st.session_state.track4_filters
         c1, c2, c3 = st.columns(3)
@@ -877,7 +948,7 @@ def render_agent2_track4(cfg=None):
         st.session_state.track4_filters = filters
         if not prepared_active:
             st.caption(
-                f"Synthetic examples start at {min_year}. Choose filters appropriate to the comparison context."
+                f"Example reference records start at {min_year}. Choose filters appropriate to the comparison context."
             )
         if st.button("Compare tender pricing", type="primary"):
             mapping_dict = {
