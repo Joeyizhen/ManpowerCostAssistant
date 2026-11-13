@@ -21,22 +21,16 @@ All members contribute to data preparation, benchmark review, testing and the de
 
 | Workstream | Status | Current progress |
 |---|---|---|
-| Data and Benchmark | Completed for the prototype | Initial historical-data preparation and standardisation of role names, quantities, rate periods and tender-status fields. Unknown values and source limitations remain recorded. |
-| Agent 1 — Manpower Budget Planning | In progress | Track 1 budget planning and core Track 2 proposal review are implemented. Integration of validated database-backed role, quantity and rate recommendations is paused pending Track 5. |
-| Agent 2 — Tender Review | Implemented for the Sprint 3 prototype | Tracks 3 and 4 support multi-tender upload, visible input validation, role matching, cost comparisons, review findings, clarification questions and exports. Track 5 and the connection to the planned shared database remain pending. |
+| Data and Benchmark | Completed for the prototype | The bundled reference dataset standardises role names, quantities, rate periods and tender-status fields. Unknown values and source limitations remain recorded. |
+| Agent 1 — Manpower Budget Planning | Implemented for the Sprint 3 prototype | Tracks 1 and 2 support manpower budget preparation, uploaded-proposal review, confirmation controls and export. |
+| Agent 2 — Tender Review | Implemented for the Sprint 3 prototype | Tracks 3 and 4 support multi-tender upload, visible input validation, role matching, cost comparisons, review findings, clarification questions and exports. |
 | Test and Demo | In progress | Automated checks cover incomplete inputs, insufficient evidence and calculation accuracy. The upload screens provide templates and worked examples for clean and validation-focused walkthroughs. |
 
-### Pending: Track 5 and shared database integration
+### Reference data used by the prototype
 
-**Tracks 1–4 are not yet connected to the planned shared database through a complete administrator-validation workflow. This integration depends on Track 5, which has not yet been implemented.**
+The repository includes a built-in example reference dataset so the core workflows can be run consistently without access to private procurement records. It contains 283 standardised comparison records across 15 roles and pricing years 2022–2026. The reference service retains source identifiers, quantities, contract years and monthly rates for reproducible comparisons. It is suitable for demonstrating the application's retrieval, calculation and review controls; it is not presented as live operational procurement data or verified market evidence.
 
-Track 5 will allow a system administrator to review and validate uploaded historical manpower data before accepted records enter the shared database. The remaining work is to:
-
-1. Build the upload, review and validation workflow in Track 5.
-2. Establish the controlled process for adding validated records to the shared database.
-3. Connect both agents' retrieval in Tracks 1–4 to those validated records, retaining source provenance and version information.
-
-For Sprint 3, the agents use the existing reference services with locally provisioned prepared snapshots or labelled synthetic demonstration data. This supports the current prototype; it does not complete the planned Track 5-managed database integration. Database-backed recommendations remain subject to data availability and comparability checks.
+Projects saved locally use SQLite by default. User uploads and saved project data remain separate from the bundled comparison references and are not automatically added to them.
 
 ### Available workflows
 
@@ -46,7 +40,6 @@ For Sprint 3, the agents use the existing reference services with locally provis
 | Agent 1 | Track 2 — Review a proposed budget | Upload an existing proposal, check the captured figures, complete material gaps and review revisions through the shared budgeting screens. |
 | Agent 2 | Track 3 — Compare against an approved budget | Upload one approved budget and up to five tenderers, verify extracted schedules, resolve blocking input issues, review role matches, compare quantities and costs, record clarifications and export findings. |
 | Agent 2 | Track 4 — Review tender pricing | Upload and validate up to five tenderers, review role matches, compare submissions against historical references, flag unusual pricing and resourcing differences, and prepare clarification questions. |
-| Agent 2 | Track 5 — Maintain historical manpower data | Planned administrator workflow for validating uploaded records before they enter the shared database. |
 
 Track 1 follows **Project → Deployment → Starting rates → Annual changes → Budget**. Track 2 starts with proposal upload and reuses the budgeting controls while keeping original figures separate from accepted revisions.
 
@@ -84,21 +77,34 @@ Choose **Tender evaluation**, then select:
 
 The upload screens provide downloadable templates and worked examples for the required workbook structure. Submitted role titles remain visible even when the user selects a standard comparison role.
 
-### Try the Site Xtown manpower budgeting example
+### Try Agent 1 with the Site Xtown example
 
-**Site Xtown is a manpower budgeting example for Agent 1, Track 1 only. It does not populate Tender evaluation (Agent 2, Tracks 3 and 4).**
+Site Xtown provides a guided Agent 1 budgeting scenario with the project details, deployment and starting assumptions already populated.
 
-Choose **Manpower budgeting → Build a new budget**, open the sidebar and select **Load Site Xtown example**.
+1. Choose **Manpower budgeting → Build a new budget**.
+2. Open the sidebar and select **Load Site Xtown example**.
+3. Review the project and deployment, work through the rates and annual changes, then review and export the budget.
 
-The included fictional project has a three-year base term plus three option years, 13 current staff and 17 proposed staff. It opens a populated budget for review and works without a private saved-project database or API key. Its rates and assumptions are illustrative; final officer approval is not preloaded.
+The example has a three-year base term plus three option years, 13 current staff and 17 proposed staff. It works without an API key. Its rates and assumptions are prepared for demonstration, and final officer approval is intentionally left to the user.
 
 A [blank proposal template and filled sample](data/templates/) are also included for Track 2. See [the Site Xtown example](docs/XTOWN_EXAMPLE.md) and [upload-first proposal review](docs/TRACK2_UPLOAD_FIRST.md).
+
+### Try Agent 2 with the built-in tender example
+
+The Agent 2 example demonstrates tender validation and comparison using the bundled reference dataset.
+
+1. Choose **Tender evaluation → Track 4 — Review and compare tenderer proposals**.
+2. Complete the project details and continue to **Upload tenderer submissions**.
+3. Open **Need an example to explore the feature?** and select **Use example tender**.
+4. Verify the extracted submissions and role matches, choose the comparison context, then review the pricing findings and clarification questions.
+
+For Track 3, select **Compare against approved budget** and use the downloadable workbook structure to upload one approved budget and up to five tenderers. The application blocks comparison when required values are missing or contradictory, and continues once the issues and role matches are confirmed.
 
 ## AI configuration and reference data
 
 **No API key is needed to download the code, open the interface, load examples, calculate costs or export results.** To use optional AI guidance, configure both `OPENAI_API_KEY` and `OPENAI_MODEL` privately in `.env` or server-side Streamlit secrets. AI requests can incur provider charges. Credentials are excluded from Git.
 
-A clean checkout uses explicitly labelled synthetic data. Private prepared references can be provisioned separately; original source workbooks, raw records, saved projects and uploads are not distributed through this repository. Starting-rate ranges shown as illustrative planning allowances are authored assumptions, not verified market prices.
+A clean checkout uses the bundled example reference dataset described above. Private prepared references can be provisioned separately; original source workbooks, raw records, saved projects and uploads are not distributed through this repository. Starting-rate ranges shown as illustrative planning allowances are authored assumptions, not verified market prices.
 
 General annual changes and eligible salary-component PWM are treated separately, with explicit applicability and published-period assumptions. See [reference provisioning](docs/PREPARED_REFERENCES.md) and [cost comparison methods](docs/HEADCOUNT_COST_COMPARISON.md) for calculation and evidence boundaries.
 
@@ -108,7 +114,6 @@ The merged Sprint 3 application passed **404 automated tests**, with three inten
 
 These checks establish software behaviour; they do not replace live AI/task evaluation or user acceptance testing. Current priorities are:
 
-- Complete Track 5 and connect both agents to the validated shared database.
 - Continue user testing, improve step-switching responsiveness and refine the end-to-end demo.
 - Complete task-based evaluation, report category results and analyse observed failures.
 - Verify the selected deployment environment and persistence before shared use.
