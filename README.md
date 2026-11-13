@@ -56,7 +56,7 @@ The application supports officer judgement. Saving a draft, accepting an AI sugg
 - Internet access for the initial dependency download
 - A modern web browser
 - A spreadsheet viewer is recommended for exported XLSX reports
-- An OpenAI API key only for optional AI-written assessments; calculations, validation and exports work without one
+- An OpenAI API key and model name for AI-written assessments and guidance; deterministic calculations, validation and exports remain available without AI
 
 ## Run the Sprint 3 application
 
@@ -70,6 +70,8 @@ Python 3.14 is the tested development version. With `uv` installed, use the comm
 git clone https://github.com/Joeyizhen/ManpowerCostAssistant.git
 cd ManpowerCostAssistant
 uv sync --frozen --python 3.14
+Copy-Item .env.example .env
+# Open .env and set OPENAI_API_KEY and OPENAI_MODEL before launching.
 uv run streamlit run app.py --server.address 127.0.0.1 --server.port 8511 --browser.gatherUsageStats false
 ```
 
@@ -79,10 +81,12 @@ uv run streamlit run app.py --server.address 127.0.0.1 --server.port 8511 --brow
 git clone https://github.com/Joeyizhen/ManpowerCostAssistant.git
 cd ManpowerCostAssistant
 uv sync --frozen --python 3.14
+cp .env.example .env
+# Open .env and set OPENAI_API_KEY and OPENAI_MODEL before launching.
 uv run streamlit run app.py --server.address 127.0.0.1 --server.port 8511 --browser.gatherUsageStats false
 ```
 
-Open `http://127.0.0.1:8511/` on the same computer. Both agents run from `app.py`. No `.env` file or API key is required for the default local workflow. Optional AI-written guidance requires private `OPENAI_API_KEY` and `OPENAI_MODEL` settings; preserve an existing `.env` rather than replacing it. Alternative installation and hosting configuration are covered in [DEPLOYMENT.md](DEPLOYMENT.md).
+Open `http://127.0.0.1:8511/` on the same computer. Both agents run from `app.py`. AI-written assessments and guidance require valid private `OPENAI_API_KEY` and `OPENAI_MODEL` settings. Without them, the interface can still run deterministic calculations, validation and exports, but its AI features are unavailable. Preserve an existing `.env` rather than replacing it. Alternative installation and hosting configuration are covered in [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Demo workflows
 
@@ -96,7 +100,7 @@ Site Xtown provides a guided budgeting scenario with the project details, deploy
 2. Open the sidebar and select **Load Site Xtown example**.
 3. Review the project and deployment, work through the starting rates and annual changes, then review and export the budget.
 
-The example has a three-year base term plus three option years, 13 current staff and 17 proposed staff. It works without an API key. Its rates and assumptions are prepared for demonstration, and final officer approval is intentionally left to the user. See [the Site Xtown example](docs/XTOWN_EXAMPLE.md).
+The example has a three-year base term plus three option years, 13 current staff and 17 proposed staff. Its deterministic budgeting steps can run without an API key, but AI-written guidance requires the configured OpenAI credentials. Its rates and assumptions are prepared for demonstration, and final officer approval is intentionally left to the user. See [the Site Xtown example](docs/XTOWN_EXAMPLE.md).
 
 #### Track 2 Review a proposed budget
 
@@ -126,7 +130,7 @@ Track 4 supports up to five tenderers and uses the bundled reference dataset for
 
 ## AI configuration and reference data
 
-**No API key is needed to download the code, open the interface, load examples, calculate costs or export results.** To use optional AI guidance, configure both `OPENAI_API_KEY` and `OPENAI_MODEL` privately in `.env` or server-side Streamlit secrets. AI requests can incur provider charges. Credentials are excluded from Git.
+**AI-written assessments and guidance require an OpenAI API key and an explicitly configured model.** Set both `OPENAI_API_KEY` and `OPENAI_MODEL` privately in `.env` or server-side Streamlit secrets. The interface, examples, deterministic calculations, validation and exports can still operate without those settings, but the AI features will be unavailable. AI requests can incur provider charges. Credentials are excluded from Git.
 
 A clean checkout uses the bundled example reference dataset described above. Private prepared references can be provisioned separately; original source workbooks, raw records, saved projects and uploads are not distributed through this repository. Starting-rate ranges shown as illustrative planning allowances are authored assumptions, not verified market prices.
 
