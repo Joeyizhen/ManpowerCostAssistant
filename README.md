@@ -49,26 +49,40 @@ The application supports officer judgement. Saving a draft, accepting an AI sugg
 
 ## System requirements
 
+- Windows, macOS or Linux with a writable project folder
 - Python 3.11–3.14 (Python 3.14 is the tested development version)
 - `uv` for dependency installation and command execution
+- Git when cloning the repository
+- Internet access for the initial dependency download
 - A modern web browser
+- A spreadsheet viewer is recommended for exported XLSX reports
 - An OpenAI API key only for optional AI-written assessments; calculations, validation and exports work without one
 
 ## Run the Sprint 3 application
 
 The combined Sprint 3 application is available on the default **`main`** branch. A normal clone provides the landing page with **Manpower budgeting** and **Tender evaluation**. The included Site Xtown example is for **Manpower budgeting only**.
 
-Python 3.14 is the tested development version. With `uv` installed:
+Python 3.14 is the tested development version. With `uv` installed, use the commands for your operating system.
+
+### Windows PowerShell
 
 ```powershell
 git clone https://github.com/Joeyizhen/ManpowerCostAssistant.git
 cd ManpowerCostAssistant
 uv sync --frozen --python 3.14
-Copy-Item .env.example .env
 uv run streamlit run app.py --server.address 127.0.0.1 --server.port 8511 --browser.gatherUsageStats false
 ```
 
-Open `http://127.0.0.1:8511/` on the same computer. Both agents run from `app.py`. Preserve an existing private `.env` rather than copying over it. Alternative installation and hosting configuration are covered in [DEPLOYMENT.md](DEPLOYMENT.md).
+### macOS or Linux terminal
+
+```bash
+git clone https://github.com/Joeyizhen/ManpowerCostAssistant.git
+cd ManpowerCostAssistant
+uv sync --frozen --python 3.14
+uv run streamlit run app.py --server.address 127.0.0.1 --server.port 8511 --browser.gatherUsageStats false
+```
+
+Open `http://127.0.0.1:8511/` on the same computer. Both agents run from `app.py`. No `.env` file or API key is required for the default local workflow. Optional AI-written guidance requires private `OPENAI_API_KEY` and `OPENAI_MODEL` settings; preserve an existing `.env` rather than replacing it. Alternative installation and hosting configuration are covered in [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Demo workflows
 
