@@ -17,7 +17,7 @@ Two agents support the workflow: **Agent 1 — Manpower Budget Planning** and **
 
 All members contribute to data preparation, benchmark review, testing and the demonstration.
 
-## Sprint 3 progress
+## Sprint 3
 
 | Workstream | Status | Current progress |
 |---|---|---|
@@ -68,37 +68,45 @@ uv run streamlit run app.py --server.address 127.0.0.1 --server.port 8511 --brow
 
 Open `http://127.0.0.1:8511/` on the same computer. Both agents run from `app.py`. Preserve an existing private `.env` rather than copying over it. Alternative installation and hosting configuration are covered in [DEPLOYMENT.md](DEPLOYMENT.md).
 
-### Agent 2 demo workflows
+## Demo workflows
 
-Choose **Tender evaluation**, then select:
+### Agent 1 Manpower budgeting
 
-- **Track 3 — Compare against approved budget:** upload an approved manpower budget, enter its approval details, and add one or more tenderers. The verification screen reports blocking completeness and comparability issues before any calculation. It detects missing contract duration or quantity, an unlabelled fractional headcount, missing annual rates within the stated contract period, and possible double escalation of a future quoted rate. The user must resolve blocking issues and confirm role matches before comparison.
-- **Track 4 — Review and compare tenderer proposals:** upload up to five tenderers, verify extracted data and role matches, select comparable historical context, then review pricing findings and clarification questions. When evidence coverage is insufficient, the application keeps the result in manual review instead of inventing a benchmark.
+#### Track 1 Build a new budget with Site Xtown
 
-The upload screens provide downloadable templates and worked examples for the required workbook structure. Submitted role titles remain visible even when the user selects a standard comparison role.
-
-### Try Agent 1 with the Site Xtown example
-
-Site Xtown provides a guided Agent 1 budgeting scenario with the project details, deployment and starting assumptions already populated.
+Site Xtown provides a guided budgeting scenario with the project details, deployment and starting assumptions already populated.
 
 1. Choose **Manpower budgeting → Build a new budget**.
 2. Open the sidebar and select **Load Site Xtown example**.
-3. Review the project and deployment, work through the rates and annual changes, then review and export the budget.
+3. Review the project and deployment, work through the starting rates and annual changes, then review and export the budget.
 
-The example has a three-year base term plus three option years, 13 current staff and 17 proposed staff. It works without an API key. Its rates and assumptions are prepared for demonstration, and final officer approval is intentionally left to the user.
+The example has a three-year base term plus three option years, 13 current staff and 17 proposed staff. It works without an API key. Its rates and assumptions are prepared for demonstration, and final officer approval is intentionally left to the user. See [the Site Xtown example](docs/XTOWN_EXAMPLE.md).
 
-A [blank proposal template and filled sample](data/templates/) are also included for Track 2. See [the Site Xtown example](docs/XTOWN_EXAMPLE.md) and [upload-first proposal review](docs/TRACK2_UPLOAD_FIRST.md).
+#### Track 2 Review a proposed budget
 
-### Try Agent 2 with the built-in tender example
+1. Choose **Manpower budgeting → Review a proposed budget**.
+2. Start with the supplied example or upload the [blank proposal template or filled sample](data/templates/).
+3. Verify the captured details, resolve missing assumptions, review revisions and export the completed budget.
 
-The Agent 2 example demonstrates tender validation and comparison using the bundled reference dataset.
+The application keeps the submitted figures separate from accepted revisions. See [upload-first proposal review](docs/TRACK2_UPLOAD_FIRST.md).
 
-1. Choose **Tender evaluation → Track 4 — Review and compare tenderer proposals**.
-2. Complete the project details and continue to **Upload tenderer submissions**.
-3. Open **Need an example to explore the feature?** and select **Use example tender**.
-4. Verify the extracted submissions and role matches, choose the comparison context, then review the pricing findings and clarification questions.
+### Agent 2 Tender evaluation
 
-For Track 3, select **Compare against approved budget** and use the downloadable workbook structure to upload one approved budget and up to five tenderers. The application blocks comparison when required values are missing or contradictory, and continues once the issues and role matches are confirmed.
+#### Track 3 Compare against an approved budget
+
+1. Choose **Tender evaluation → Compare against approved budget**.
+2. Upload one approved manpower budget, enter its approval details and add up to five tenderers.
+3. Review the validation results and role matches, resolve all blocking issues, then compare quantities and costs and export the findings.
+
+The validation screen detects missing contract duration or quantity, an unlabelled fractional headcount, missing annual rates within the stated contract period and possible double escalation of a future quoted rate. Comparison remains blocked until required corrections and confirmations are complete.
+
+#### Track 4 Review and compare tenderer proposals
+
+1. Choose **Tender evaluation → Review and compare tenderer proposals**.
+2. Complete the project details, continue to **Upload tenderer submissions**, then open **Need an example to explore the feature?** and select **Use example tender**.
+3. Verify the extracted submissions and role matches, select the comparison context, then review the pricing findings and clarification questions.
+
+Track 4 supports up to five tenderers and uses the bundled reference dataset for repeatable comparisons. When evidence coverage is insufficient, the application keeps the result in manual review instead of inventing a benchmark. Submitted role titles remain visible even when a standard comparison role is selected.
 
 ## AI configuration and reference data
 
