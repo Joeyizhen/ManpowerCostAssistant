@@ -1,6 +1,6 @@
 # AI-Powered FM Manpower Cost Assistant
 
-**DSS5105 Data Science Project in Practice · Sprint 2 · 30 October 2026**
+**DSS5105 Data Science Project in Practice · Sprint 3 · 13 November 2026**
 
 An AI-assisted application for facilities management officers to prepare manpower budgets and review tender submissions. The system brings budget planning, proposal review and tender evaluation into one interface, with traceable assumptions and officer confirmation at key decisions.
 
@@ -17,14 +17,14 @@ Two agents support the workflow: **Agent 1 — Manpower Budget Planning** and **
 
 All members contribute to data preparation, benchmark review, testing and the demonstration.
 
-## Sprint 2 progress
+## Sprint 3 progress
 
 | Workstream | Status | Current progress |
 |---|---|---|
 | Data and Benchmark | Completed for the prototype | Initial historical-data preparation and standardisation of role names, quantities, rate periods and tender-status fields. Unknown values and source limitations remain recorded. |
 | Agent 1 — Manpower Budget Planning | In progress | Track 1 budget planning and core Track 2 proposal review are implemented. Integration of validated database-backed role, quantity and rate recommendations is paused pending Track 5. |
-| Agent 2 — Tender Review | In progress | Tracks 3 and 4 support prototype cost comparisons, review findings and clarification questions. Track 5 and the connection to the planned shared database remain pending. |
-| Test and Demo | In progress | Automated checks cover incomplete inputs, insufficient evidence and calculation accuracy. User testing, UI/UX refinement and end-to-end demonstration preparation continue. |
+| Agent 2 — Tender Review | Implemented for the Sprint 3 prototype | Tracks 3 and 4 support multi-tender upload, visible input validation, role matching, cost comparisons, review findings, clarification questions and exports. Track 5 and the connection to the planned shared database remain pending. |
+| Test and Demo | In progress | Automated checks cover incomplete inputs, insufficient evidence and calculation accuracy. The upload screens provide templates and worked examples for clean and validation-focused walkthroughs. |
 
 ### Pending: Track 5 and shared database integration
 
@@ -36,7 +36,7 @@ Track 5 will allow a system administrator to review and validate uploaded histor
 2. Establish the controlled process for adding validated records to the shared database.
 3. Connect both agents' retrieval in Tracks 1–4 to those validated records, retaining source provenance and version information.
 
-For Sprint 2, the agents use the existing reference services with locally provisioned prepared snapshots or labelled synthetic demonstration data. This supports the current prototype; it does not complete the planned Track 5-managed database integration. Database-backed recommendations remain subject to data availability and comparability checks.
+For Sprint 3, the agents use the existing reference services with locally provisioned prepared snapshots or labelled synthetic demonstration data. This supports the current prototype; it does not complete the planned Track 5-managed database integration. Database-backed recommendations remain subject to data availability and comparability checks.
 
 ### Available workflows
 
@@ -44,17 +44,24 @@ For Sprint 2, the agents use the existing reference services with locally provis
 |---|---|---|
 | Agent 1 | Track 1 — Build a new budget | Define the project, compare current and proposed deployment, select starting rates and annual changes, then review and export the budget. |
 | Agent 1 | Track 2 — Review a proposed budget | Upload an existing proposal, check the captured figures, complete material gaps and review revisions through the shared budgeting screens. |
-| Agent 2 | Track 3 — Compare against an approved budget | Verify budget and tenderer schedules, review role matches, compare quantities and costs, record clarifications and export findings. |
-| Agent 2 | Track 4 — Review tender pricing | Compare submissions against historical references, flag unusual pricing and resourcing differences, and prepare clarification questions. Dedicated like-for-like cross-tenderer comparison remains pending. |
+| Agent 2 | Track 3 — Compare against an approved budget | Upload one approved budget and up to five tenderers, verify extracted schedules, resolve blocking input issues, review role matches, compare quantities and costs, record clarifications and export findings. |
+| Agent 2 | Track 4 — Review tender pricing | Upload and validate up to five tenderers, review role matches, compare submissions against historical references, flag unusual pricing and resourcing differences, and prepare clarification questions. |
 | Agent 2 | Track 5 — Maintain historical manpower data | Planned administrator workflow for validating uploaded records before they enter the shared database. |
 
 Track 1 follows **Project → Deployment → Starting rates → Annual changes → Budget**. Track 2 starts with proposal upload and reuses the budgeting controls while keeping original figures separate from accepted revisions.
 
 The application supports officer judgement. Saving a draft, accepting an AI suggestion, confirming inputs and approving a final budget are separate actions. It does not select a winning tenderer.
 
-## Run the Sprint 2 application
+## System requirements
 
-The combined Sprint 2 application is available on the default **`main`** branch. A normal clone provides the landing page with **Manpower budgeting** and **Tender evaluation**. The included Site Xtown example is for **Manpower budgeting only**.
+- Python 3.11–3.14 (Python 3.14 is the tested development version)
+- `uv` for dependency installation and command execution
+- A modern web browser
+- An OpenAI API key only for optional AI-written assessments; calculations, validation and exports work without one
+
+## Run the Sprint 3 application
+
+The combined Sprint 3 application is available on the default **`main`** branch. A normal clone provides the landing page with **Manpower budgeting** and **Tender evaluation**. The included Site Xtown example is for **Manpower budgeting only**.
 
 Python 3.14 is the tested development version. With `uv` installed:
 
@@ -67,6 +74,15 @@ uv run streamlit run app.py --server.address 127.0.0.1 --server.port 8511 --brow
 ```
 
 Open `http://127.0.0.1:8511/` on the same computer. Both agents run from `app.py`. Preserve an existing private `.env` rather than copying over it. Alternative installation and hosting configuration are covered in [DEPLOYMENT.md](DEPLOYMENT.md).
+
+### Agent 2 demo workflows
+
+Choose **Tender evaluation**, then select:
+
+- **Track 3 — Compare against approved budget:** upload an approved manpower budget, enter its approval details, and add one or more tenderers. The verification screen reports blocking completeness and comparability issues before any calculation. It detects missing contract duration or quantity, an unlabelled fractional headcount, missing annual rates within the stated contract period, and possible double escalation of a future quoted rate. The user must resolve blocking issues and confirm role matches before comparison.
+- **Track 4 — Review and compare tenderer proposals:** upload up to five tenderers, verify extracted data and role matches, select comparable historical context, then review pricing findings and clarification questions. When evidence coverage is insufficient, the application keeps the result in manual review instead of inventing a benchmark.
+
+The upload screens provide downloadable templates and worked examples for the required workbook structure. Submitted role titles remain visible even when the user selects a standard comparison role.
 
 ### Try the Site Xtown manpower budgeting example
 
@@ -88,7 +104,7 @@ General annual changes and eligible salary-component PWM are treated separately,
 
 ## Validation and next steps
 
-The combined application passed **402 automated tests**, with three intentional skips requiring private officer snapshots. Verification included a clean package, fresh locked dependencies, both agents' workflows, confirmation safeguards, exports and an isolated server startup check. The publication audit found no issues in the 161-file shareable set.
+The merged Sprint 3 application passed **404 automated tests**, with three intentional skips that require private officer snapshots. The suite covers both agents' workflows, confirmation safeguards, exports, input validation and comparison calculations.
 
 These checks establish software behaviour; they do not replace live AI/task evaluation or user acceptance testing. Current priorities are:
 
