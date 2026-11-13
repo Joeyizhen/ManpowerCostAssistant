@@ -28,9 +28,11 @@ All members contribute to data preparation, benchmark review, testing and the de
 
 ### Reference data used by the prototype
 
-The repository includes a built-in example reference dataset so the core workflows can be run consistently without access to private procurement records. It contains 283 standardised comparison records across 15 roles and pricing years 2022–2026. The reference service retains source identifiers, quantities, contract years and monthly rates for reproducible comparisons. It is suitable for demonstrating the application's retrieval, calculation and review controls; it is not presented as live operational procurement data or verified market evidence.
+The project reference dataset was derived from real workplace tender submissions made available to the team for this project. Before use, confidential and identifying information, including organisation names, tenderer names and document identifiers, was removed or generalised. The remaining manpower information was standardised into 283 comparison records across 15 roles, with project reference years 2022–2026 used for consistent filtering.
 
-Projects saved locally use SQLite by default. User uploads and saved project data remain separate from the bundled comparison references and are not automatically added to them.
+The agents use this sanitised dataset to retrieve comparable roles, quantities, contract years and monthly rates. This allows the budgeting and tender-review workflows to be tested against realistic submission structures and pricing patterns. Internal source identifiers are non-identifying project references retained for reproducible calculations. The dataset is a project reference resource, not a live procurement system or an independently verified market benchmark.
+
+Projects saved locally use SQLite by default. User uploads and saved project data remain separate from the project reference dataset and are not automatically added to it.
 
 ### Available workflows
 
