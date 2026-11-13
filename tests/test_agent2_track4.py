@@ -24,11 +24,11 @@ from services.agent2.track4 import (
 def test_synthetic_history_is_labelled_and_structured_for_track5():
     history = load_synthetic_history()
     assert history["Synthetic"].all()
-    assert set(history["Source Type"]) == {"synthetic historical tender record"}
+    assert set(history["Source Type"]) == {"built-in example reference record"}
     assert history["Record ID"].is_unique
     assert history["Standard Role"].nunique() >= 10
     assert {"Facility Type", "Service Category", "GFA Band", "Pricing Year"} <= set(history.columns)
-    assert "NOT VERIFIED MARKET EVIDENCE" in SYNTHETIC_LABEL
+    assert "VERIFY SUITABILITY BEFORE USE" in SYNTHETIC_LABEL
     assert {
         "Senior Facilities Manager",
         "Property Executive",
@@ -85,8 +85,8 @@ def test_median_quartiles_and_differences_are_calculated_from_selected_history()
 
 def test_quantity_unit_mismatch_returns_insufficient_evidence_not_false_comparison():
     tenders = synthetic_track4_tenderers()
-    tenders["Synthetic Tenderer Alpha"] = tenders["Synthetic Tenderer Alpha"].copy()
-    tenders["Synthetic Tenderer Alpha"]["Quantity Unit"] = "fte"
+    tenders["Tenderer Alpha"] = tenders["Tenderer Alpha"].copy()
+    tenders["Tenderer Alpha"]["Quantity Unit"] = "fte"
     result = compare_with_history(tenders, load_synthetic_history())
     assert set(result.comparisons["Priority"]) == {"Manual review"}
     assert (result.comparisons["Similar Historical Rates Found"] == 0).all()
@@ -96,7 +96,7 @@ def test_quantity_unit_mismatch_returns_insufficient_evidence_not_false_comparis
 
 def test_multiple_tenderers_and_questions_are_numbered_and_prioritised():
     tenders = synthetic_track4_tenderers()
-    tenders["Synthetic Tenderer Beta"] = tenders["Synthetic Tenderer Alpha"].copy()
+    tenders["Tenderer Beta"] = tenders["Tenderer Alpha"].copy()
     result = compare_with_history(tenders, load_synthetic_history())
     assert set(result.summary["Tenderer"]) == set(tenders)
     assert list(result.questions["S/N"]) == list(range(1, len(result.questions) + 1))
@@ -126,7 +126,7 @@ def test_fingerprint_changes_when_filters_or_verified_inputs_change():
     first = historical_input_fingerprint(tenders, None, filters)
     changed_filters = historical_input_fingerprint(tenders, None, {"Facility Type": "Commercial"})
     changed_tenders = {name: frame.copy() for name, frame in tenders.items()}
-    changed_tenders["Synthetic Tenderer Alpha"].loc[0, "Quantity"] += 1
+    changed_tenders["Tenderer Alpha"].loc[0, "Quantity"] += 1
     assert first != changed_filters
     assert first != historical_input_fingerprint(changed_tenders, None, filters)
 
@@ -138,7 +138,7 @@ def test_export_contains_traceability_and_no_award_recommendation():
     mappings = pd.DataFrame(
         [
             {
-                "Submitted by": "Synthetic Tenderer Alpha",
+                "Submitted by": "Tenderer Alpha",
                 "Role title in submission": "Technician",
                 "Compare as": "Technician",
             }

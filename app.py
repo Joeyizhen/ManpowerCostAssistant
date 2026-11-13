@@ -51,7 +51,7 @@ st.set_page_config(
     page_title="FM Manpower Cost Assistant",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 
@@ -125,14 +125,16 @@ if st.session_state.selected_track == 2:
     st.stop()
 
 if st.session_state.selected_track == 3:
-    from agent2_views import render_agent2_track3
+    from agent2_views import render_agent2_track3, render_agent2_track3_sidebar
 
+    render_agent2_track3_sidebar(cfg)
     render_agent2_track3(cfg)
     st.stop()
 
 if st.session_state.selected_track == 4:
-    from agent2_track4_views import render_agent2_track4
+    from agent2_track4_views import render_agent2_track4, render_agent2_track4_sidebar
 
+    render_agent2_track4_sidebar(cfg)
     render_agent2_track4(cfg)
     st.stop()
 

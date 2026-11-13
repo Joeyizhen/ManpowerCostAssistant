@@ -758,7 +758,10 @@ def validation_warnings(frame: pd.DataFrame) -> pd.DataFrame:
         quantity = pd.to_numeric(pd.Series([row.get("Quantity")]), errors="coerce").iloc[0]
         rate = pd.to_numeric(pd.Series([row.get("Monthly Rate (SGD)")]), errors="coerce").iloc[0]
         quantity_unit = str(row.get("Quantity Unit", "")).strip().casefold()
-        justification = str(row.get("Officer Justification", "")).strip()
+        raw_justification = row.get("Officer Justification", "")
+        justification = (
+            "" if pd.isna(raw_justification) else str(raw_justification).strip()
+        )
         assumption_confirmed = (
             str(row.get("Officer Assumption Confirmed", "")).strip().casefold() in confirmed_values
         )
@@ -768,8 +771,9 @@ def validation_warnings(frame: pd.DataFrame) -> pd.DataFrame:
                     "Row": index + 1,
                     "Field": "Monthly Rate (SGD)",
                     "Review note": (
-                        "High monthly rate accepted because an officer justification was supplied; "
-                        "retain the justification in the review evidence."
+                        f'High monthly rate retained for review. Officer justification supplied: '
+                        f'"{justification}" This is not automatic approval; verify the explanation '
+                        "before accepting the rate."
                     ),
                 }
             )
@@ -1084,6 +1088,20 @@ def compare_track3(
                 quantity_unit=str(t_y1["Quantity Unit"].iloc[0]) if not t_y1.empty else None,
             )
             benchmark_text = position(t_rate, benchmark) if t_rate is not None else "No submitted rate"
+            benchmark_records = benchmark.get("records", [])
+            benchmark_record_ids = ", ".join(
+                str(record.get("record_id", "")) for record in benchmark_records
+                if record.get("record_id")
+            )
+            benchmark_sources = "; ".join(
+                sorted(
+                    {
+                        str(record.get("source", "")).strip()
+                        for record in benchmark_records
+                        if str(record.get("source", "")).strip()
+                    }
+                )
+            )
             role_rows.append(
                 {
                     "Tenderer": tenderer,
@@ -1097,6 +1115,14 @@ def compare_track3(
                     "Role Cost Variance to Budget (%)": cost_pct,
                     "Comparison with Similar Past Rates": benchmark_text,
                     "Similar Past Rates Found": benchmark["sample_count"],
+                    "Benchmark Pricing Year": benchmark_year,
+                    "Benchmark Median Monthly Rate (SGD)": benchmark.get("median"),
+                    "Benchmark Typical Range Low (SGD)": benchmark.get("p25"),
+                    "Benchmark Typical Range High (SGD)": benchmark.get("p75"),
+                    "Benchmark Record IDs": benchmark_record_ids or "None",
+                    "Benchmark Source References": benchmark_sources or "No matching source",
+                    "Benchmark Method": benchmark.get("method", ""),
+                    "Benchmark Limitations": benchmark.get("limitations", ""),
                 }
             )
             if role in budget_roles and role not in tender_roles:
